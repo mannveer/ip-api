@@ -1,8 +1,9 @@
 // import {getFileFromDB, fetchAllFiles} from '../services/fileService.js';
 // import {deleteFileFromCloudinary,uploadOnCloudinary} from '../utils/cloudinary.js';
-import {getFilePath, getFile1,getFileInfo,getAllFilesInfo,deleteFile,deleteFileInfo, insertFileInfo, createDirectory } from '../services/fileService.js';
+import {getFilePath, getFile1,getFileInfo,getAllFilesInfo,deleteFile, insertFileInfo, createDirectory, getFilePaths } from '../services/fileService.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,9 +22,6 @@ export const uploadFile = async (req, res) => {
           const file = req.file;
           const filePath = path.join(FILES_DIR_PATH, file.filename);
           
-          // const localFilePath = req.file.path;
-          // const response = await uploadOnCloudinary(localFilePath); 
-          
 
             const fileModel = {
             originalfilename: file.originalname,
@@ -31,6 +29,7 @@ export const uploadFile = async (req, res) => {
             dirpath: FILES_DIR_PATH,
             size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
             mimetype: file.mimetype,
+            description: file.description ?? '',
             price: file.price ?? 0,
             sampleFiles: file.sampleFiles ?? [],
             samplefilesdirpath: SAMPLE_FILES_DIR_PATH + file.filename
@@ -53,6 +52,28 @@ export const uploadFile = async (req, res) => {
     } catch (error) {
         res.status(500).json({message: error.message});
     }
+}
+
+export const getSampleFileByFileName = async (req, res, next) => {
+    try {
+        const fileName = req.params.filename;
+        const filePaths = await getFilePaths(`${SAMPLE_FILES_DIR_PATH}\\${fileName}`);        if (!filePaths) {
+            if (!filePaths || filePaths.length === 0) {
+                return res.status(404).send('File not found');
+              }
+            }
+        // res.sendFile(filePaths);
+        const fileUrls = filePaths.map(filePath => {
+            return `${req.protocol}://${req.get('host')}/api/v1/file/file-sample/${fileName}/${path.basename(filePath)}`;
+          });
+        res.json({
+            status: 'success',
+            message: 'Files retrieved successfully',
+            data: fileUrls,
+          });
+      } catch (error) {
+        next(error);
+      }
 }
 
 export const getFile = async (req, res) => {
@@ -96,8 +117,8 @@ export const deleteFileAndDetails = async (req, res) => {
 export const getFilePreview = async (req, res, next) => {
     try {
       const fileName = req.params.filename;
-      console.log("FileName - ",fileName)
       const filePath = await getFilePath(PREVIEW_FILES_DIR_PATH+'//'+fileName, fileName);
+      console.log("FilePath - ",filePath)
       if (!filePath) {
         return res.status(404).send('File not found');
       }
@@ -106,6 +127,24 @@ export const getFilePreview = async (req, res, next) => {
       next(error);
     }
   };
+
+  export const getFileSample = async (req, res, next) => {
+    try {
+      const fileName = req.params.filename;
+      const sampleFileName = req.params.sample;
+      console.log("FileName - ",sampleFileName)
+      // const filePath = await getFilePath(SAMPLE_FILES_DIR_PATH+'//'+fileName);
+      const filePath = path.join(SAMPLE_FILES_DIR_PATH, fileName, sampleFileName);
+      if (!filePath) {
+        return res.status(404).send('File not found');
+      }
+      res.sendFile(filePath);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+
 
 
   // export const getAllFiles = async (req,res) => {

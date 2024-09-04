@@ -1,0 +1,11 @@
+groups:
+  - name: example
+    rules:
+    - alert: HighRequestLatency
+      expr: histogram_quantile(0.9, rate(http_request_duration_seconds_bucket[5m])) > 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High request latency"
+        description: "90th percentile latency over 1 second for the last 5 minutes."

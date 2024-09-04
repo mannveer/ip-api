@@ -7,24 +7,10 @@ import Contact from "../models/contactModel.js";
 
 export const insertUser = async (req, res, next) => {
   try {
-    const { email,name,otp,purpose,purchase } = req.body;
+    const { email,name,purchase } = req.body;
 
-    if(!email || !name || !otp || !purpose){
-      return res.status(400).json({ status: 'error', message: 'Email, Name and OTP is required' });
-    }
-
-    const storedOtp = await Otp.findOne({email,purpose:purpose}).select('+otp');
-
-    if (!storedOtp) {
-      return res.status(404).json({ message: 'OTP not found' });
-    }
-    if(!storedOtp.isUsed){
-      return res.status(400).json({ message: 'OTP not verified' });
-    }
-    
-    const isMatch = await otpService.compareOtp(otp, storedOtp.otp);
-    if (!isMatch || storedOtp.isExpired()) {
-      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    if(!email || !name ){
+      return res.status(400).json({ status: 'error', message: 'Email and Name is required' });
     }
 
     const { user,token } = await userService.inserData({ email,name,purchase });
@@ -33,7 +19,7 @@ export const insertUser = async (req, res, next) => {
     emailService.sendWelcome()
       .then(() => {
         console.log('Welcome email sent');
-        res.status(201).json({ status: 'success', token, data: { user } });
+        res.status(201).json({ status: 'success' });
       })
       .catch(error => {
         console.error('Error sending welcome email:', error)
@@ -47,25 +33,10 @@ export const insertUser = async (req, res, next) => {
 
 export const getUserDetails = async (req, res, next) => {
   try {
-    const { email,name,otp,purpose } = req.query;
-    console.log('req.params',req.query);
+    const { email,name } = req.query;
 
-    if (!email || !name || !otp || !purpose) {
-      return res.status(400).json({ status: 'error', message: 'Email, OTP, Purpose and Name is required' });
-    }
-
-    const storedOtp = await Otp.findOne({email,purpose}).select('+otp');
-
-    if (!storedOtp) {
-      return res.status(404).json({ message: 'OTP not found' });
-    }
-    if(!storedOtp.isUsed){
-      return res.status(400).json({ message: 'OTP not verified' });
-    }
-
-    const isMatch = await otpService.compareOtp(otp, storedOtp.otp);
-    if (!isMatch || storedOtp.isExpired()) {
-      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    if (!email || !name ) {
+      return res.status(400).json({ status: 'error', message: 'Email and Name is required' });
     }
 
     const user = await userService.getDetails({ email,name });

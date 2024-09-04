@@ -1,4 +1,4 @@
-;import dotenv from 'dotenv';
+import dotenv from 'dotenv';
 dotenv.config();
 
 export const configs = {
@@ -18,13 +18,15 @@ export const configs = {
 }
 
 export const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
-export const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
+export const jwtExpiresIn = process.env.JWT_EXPIRE || '10m';
 export const bcryptSaltRounds = 12;
 export const emailFrom = process.env.EMAIL_FROM || 'no-reply@example.com';
 export const emailHost = process.env.EMAIL_HOST || 'smtp.example.com';
 export const emailPort = process.env.EMAIL_PORT || 587;
 export const emailUsername = process.env.EMAIL_USERNAME || 'username';
 export const emailPassword = process.env.EMAIL_PASSWORD || 'password';
-export const OtpLength = 6;
-export const OtpExpTime = 300000;
+export const OtpLength = process.env.OTP_LENGTH || 6;
+export const OtpExpTime = process.env.OTP_EXPIRE || 180000;
 export const OtpMaxAttempts = 3;
+export const MAX_RETRIES_EMAIL = 3;
+export const EMAIL_RETRY_DELAY = 2000;

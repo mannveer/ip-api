@@ -95,6 +95,7 @@ export const getFile1 = async (dirPath, filename, res) => {
   });
 };
 
+
 export const deleteFile = async (dirPath, filename, fileId) => {
   if (!dirPath || !filename || !fileId) {
     throw new appError('Directory path, filename and fileId are required', 400);
@@ -141,13 +142,34 @@ export const deleteFile = async (dirPath, filename, fileId) => {
   export const getFilePath = async (filesDirectory,fileName) => {
     try {
       const files = await fs1.readdir(filesDirectory);
-      const file = files.find(file => file.startsWith(fileName));
-      if (!file) {
+      if (files.length === 0) {
         return null;
       }
-      return path.join(filesDirectory, file);
+      // const file = files.find(file => file.startsWith(fileName));
+      // if (!file) {
+      //   return null;
+      // }
+      return path.join(filesDirectory, files[0]);
     } catch (error) {
       throw new Error('Error fetching file path');
+    }
+  };
+
+ export const getExactPath = (dir,file) => {
+    return path.join(dir, file);
+  }
+
+
+
+  export const getFilePaths = async (filesDirectory) => {
+    try {
+      const files = await fs1.readdir(filesDirectory);
+      if (files.length === 0) {
+        return [];
+      }
+      return files.map(file => path.join(filesDirectory, file));
+    } catch (error) {
+      throw new appError('Error fetching file paths', 500);
     }
   };
   

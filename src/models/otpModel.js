@@ -36,7 +36,7 @@ const otpSchema = new Schema({
     purpose: {
         type: String,
         required: [true, 'Please specify the purpose of the OTP'],
-        enum: ['purchage','na','pay','verify'],
+        enum: ['na','pay','verify'],
         default: 'na'
     },
     attempts: {

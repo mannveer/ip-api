@@ -17,6 +17,7 @@ const fileSchema = new mongoose.Schema({
   size: { type: String, required: true },
   mimetype: { type: String, required: true },
   price: { type: Number, required: true, min: 0 },
+  description: { type: String, required: true },
   isDeleted: { type: Boolean, required: true, default: false },
   sampleFiles: { type: [sampleFileSchema], required: true, default: [] },
   updatedAt: { type: Date, default: Date.now }

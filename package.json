@@ -18,6 +18,8 @@
     "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
     "express": "^4.18.3",
+    "express-rate-limit": "^7.4.0",
+    "express-redis-cache": "^1.1.3",
     "express-session": "^1.18.0",
     "express-validator": "^7.1.0",
     "googleapis": "^140.0.1",
@@ -32,8 +34,9 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
+    "prom-client": "^15.1.3",
     "razorpay": "^2.9.4",
-    "redis": "^4.6.13",
+    "redis": "^4.7.0",
     "winston": "^3.13.1"
   }
 }

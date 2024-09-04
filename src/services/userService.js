@@ -1,6 +1,5 @@
 import User from '../models/userModel.js';
-import { createToken } from '../utils/jwt.js';
-import { jwtSecret, jwtExpiresIn } from '../config/config.js';
+import { generateAccessToken } from '../utils/jwt.js';
 
 class UserService {
     async inserData(userData) {
@@ -14,9 +13,7 @@ class UserService {
       } else {
         user = await User.create({ email, name, purchases: [purchase] });
       }
-  
-      const token = createToken(user._id, jwtSecret, jwtExpiresIn);
-      return { user, token };
+      return { user };
     }
 
     async getDetails(userData) {

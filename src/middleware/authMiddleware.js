@@ -1,7 +1,8 @@
 import jwt from 'jsonwebtoken';
-import User from '../models/user';
-import AppError from '../utils/appError';
+import User from '../models/userModel.js';
+import AppError from '../utils/errorHandler.js';
 import { promisify } from 'util';
+import { jwtSecret, jwtExpiresIn } from '../config/config.js';
 
 export const protect = async (req, res, next) => {
   let token;
@@ -13,7 +14,10 @@ export const protect = async (req, res, next) => {
     return next(new AppError('You are not logged in! Please log in to get access.', 401));
   }
 
-  const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
+  const decoded = await promisify(jwt.verify)(token, jwtSecret);
+
+  // const decoded = await promisify(verifyAccessToken)(token);
+
 
   const currentUser = await User.findById(decoded.id);
   if (!currentUser) {
@@ -23,3 +27,4 @@ export const protect = async (req, res, next) => {
   req.user = currentUser;
   next();
 };
+

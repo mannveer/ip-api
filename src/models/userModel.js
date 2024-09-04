@@ -5,15 +5,12 @@ const { Schema } = mongoose;
 const PurchaseSchema = new Schema({
   filename: String,
   purchase: {
-    id: String,
+    fileid: String,
     entity: String,
     amount: Number,
     currency: String,
     status: String,
-    receipt: String,
-    offer_id: String,
-    attempts: Number,
-    notes: Array,
+    paymentid: String,
     created_at: Number
   }
 });
@@ -54,6 +51,9 @@ const UserSchema = new Schema({
     type: Date,
     default: Date.now,
     required: true
+  },
+  accessToken: {
+    type: String
   }
 });
 
