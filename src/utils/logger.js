@@ -1,10 +1,10 @@
 import winston from 'winston';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import WinstonCloudwatch from 'winston-cloudwatch'; // For cloud-based logging like AWS
 
-// Destructure properties from the default export of 'winston'
 const { createLogger, format, transports } = winston;
-const { combine, timestamp, printf, json, errors } = format;
+const { combine, timestamp, printf, errors, json } = format;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,59 +14,77 @@ const logFormat = printf(({ level, message, timestamp, stack }) => {
   return `${timestamp} [${level.toUpperCase()}]: ${stack || message}`;
 });
 
-// Create the logger
+// Create logger
 const logger = createLogger({
-  level: 'info',  // Default log level, can be changed dynamically
+  level: 'info', // Default level, can be changed dynamically
   format: combine(
-    timestamp(), // Add timestamp to logs
-    errors({ stack: true }), // Handle errors and print stack trace
-    logFormat // Apply custom log format
+    timestamp(),
+    errors({ stack: true }), // Capture stack traces in error logs
+    logFormat // Custom log format
   ),
   transports: [
     new transports.Console({
       format: combine(
-        format.colorize(), // Colorize output to console
+        format.colorize(),
         logFormat
-      )
-    }),
-    new transports.File({
-      filename: path.join(__dirname, 'logs', 'error.log'),
-      level: 'error',  // Log errors to a specific file
-      format: combine(
-        json()  // Store logs in JSON format for structured logging
-      )
-    }),
-    new transports.File({
-      filename: path.join(__dirname, 'logs', 'combined.log'),
-      format: combine(
-        json()  // Store logs in JSON format for structured logging
       )
     })
   ],
   exceptionHandlers: [
-    new transports.File({
-      filename: path.join(__dirname, 'logs', 'exceptions.log'),
+    new transports.Console({
       format: combine(
-        json()  // Handle uncaught exceptions
+        format.colorize(),
+        logFormat
       )
     })
   ],
   rejectionHandlers: [
-    new transports.File({
-      filename: path.join(__dirname, 'logs', 'rejections.log'),
+    new transports.Console({
       format: combine(
-        json()  // Handle unhandled promise rejections
+        format.colorize(),
+        logFormat
       )
     })
   ]
 });
 
-// Change log level dynamically if needed (e.g., from environment variables)
+// For local development, add file logging
 if (process.env.NODE_ENV === 'development') {
-  logger.level = 'debug';  // More verbose logging in development mode
+  logger.add(new transports.File({
+    filename: path.join(__dirname, 'logs', 'error.log'),
+    level: 'error',
+    format: combine(
+      json() // Store error logs in JSON format for better parsing
+    )
+  }));
+
+  logger.add(new transports.File({
+    filename: path.join(__dirname, 'logs', 'combined.log'),
+    format: combine(
+      json() // Store logs in JSON format
+    )
+  }));
 }
 
-// Helper function for structured logs
+// For production, use cloud-based logging or handle other production strategies
+if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+  logger.add(new WinstonCloudwatch({
+    logGroupName: 'your-log-group', // Replace with your CloudWatch log group
+    logStreamName: 'your-log-stream', // Replace with your CloudWatch log stream
+    awsRegion: 'your-region' // Replace with your AWS region
+  }));
+
+  // Optionally remove file-based transports in production
+  logger.clear();
+  logger.add(new transports.Console({
+    format: combine(
+      format.colorize(),
+      logFormat
+    )
+  }));
+}
+
+// Example helper functions for structured logging
 logger.infoWithMeta = function (message, meta) {
   this.log('info', message, meta);
 };
