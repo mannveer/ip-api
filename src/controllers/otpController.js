@@ -63,7 +63,7 @@ export const generateOtp = async (req, res, next) => {
 
     try {
       await sendEmailWithRetry(emailService, otpNumber);
-      res.status(201).json({ otp: otpNumber });
+      res.status(201).json({ message: "Otp sent successfully." });
     } catch (error) {
       await Otp.deleteOne({ email: req.body.email });
       return res.status(error.statusCode || 500).json({
