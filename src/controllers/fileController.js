@@ -103,6 +103,7 @@ export const getFileDetails = async (req, res) => {
 
 export const getAllFilesDetails = async (req, res) => {
     try {
+        console.log("Searching files at - ", FILES_DIR_PATH)
         const filesInfo = await getAllFilesInfo(FILES_DIR_PATH);
         res.status(200).json(filesInfo);
     } catch (error) {
