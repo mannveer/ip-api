@@ -5,11 +5,16 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const FILES_DIR_PATH = path.join(__dirname, '..', '..', 'DeliveryFiles', 'files');
-const SAMPLE_FILES_DIR_PATH = path.join(__dirname, '..', '..', 'DeliveryFiles', 'sample-files');
-const PREVIEW_FILES_DIR_PATH = path.join(__dirname, '..', '..', 'DeliveryFiles', 'preview-files');
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
+// const FILES_DIR_PATH = path.join(__dirname, '..', '..', 'DeliveryFiles', 'files');
+// const SAMPLE_FILES_DIR_PATH = path.join(__dirname, '..', '..', 'DeliveryFiles', 'sample-files');
+// const PREVIEW_FILES_DIR_PATH = path.join(__dirname, '..', '..', 'DeliveryFiles', 'preview-files');
+
+const DELIVERY_FILES_DIR = path.join(process.cwd(), 'DeliveryFiles');
+const FILES_DIR_PATH = path.join(DELIVERY_FILES_DIR, 'files');
+const SAMPLE_FILES_DIR_PATH = path.join(DELIVERY_FILES_DIR, 'sample-files');
+const PREVIEW_FILES_DIR_PATH = path.join(DELIVERY_FILES_DIR, 'preview-files');
 
 export const uploadFile = async (req, res) => {
     try {
