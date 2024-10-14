@@ -62,11 +62,13 @@ export const uploadFile = async (req, res) => {
 export const getSampleFileByFileName = async (req, res, next) => {
     try {
         const fileName = req.params.filename;
-        const filePaths = await getFilePaths(`${SAMPLE_FILES_DIR_PATH}\\${fileName}`);        if (!filePaths) {
+        console.log(`Inside getSampleFileByFileName...`)
+
+        console.log(`SAMPLE_FILES_DIR_PATH is ${SAMPLE_FILES_DIR_PATH} and fileName is ${fileName}`)
+        const filePaths = await getFilePaths(path.join(SAMPLE_FILES_DIR_PATH, fileName));
             if (!filePaths || filePaths.length === 0) {
                 return res.status(404).send('File not found');
               }
-            }
         // res.sendFile(filePaths);
         const fileUrls = filePaths.map(filePath => {
             return `${req.protocol}://${req.get('host')}/api/v1/file/file-sample/${fileName}/${path.basename(filePath)}`;
@@ -107,6 +109,11 @@ export const getAllFilesDetails = async (req, res) => {
         const filesInfo = await getAllFilesInfo(FILES_DIR_PATH);
         res.status(200).json(filesInfo);
     } catch (error) {
+        if(error.statusCode)
+        res.status(error.statusCode).json({message: error.message});
+        else
+        res.status(500).json({message: error.message});
+
         res.status(500).json({message: error.message});
     }
 }
