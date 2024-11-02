@@ -1,36 +1,31 @@
 import client from 'prom-client';
-
+import configs from '../config/index.js';
 
 // Create a Registry to register the metrics
 const register = new client.Registry();
 
 // Default labels added to all metrics
 register.setDefaultLabels({
-  app: 'your-node-app',
+  app: configs.appName,
 });
 
-// Collect default metrics (e.g., CPU, memory usage, etc.)
 client.collectDefaultMetrics({ register });
 
-// Custom HTTP request counter
 const httpRequestCounter = new client.Counter({
   name: 'http_requests_total',
   help: 'Total number of HTTP requests',
   labelNames: ['method', 'route', 'status_code'],
 });
 
-// Custom HTTP request duration histogram
 const httpRequestDurationHistogram = new client.Histogram({
   name: 'http_request_duration_seconds',
   help: 'Histogram of HTTP request durations in seconds',
   labelNames: ['method', 'route', 'status_code'],
 });
 
-// Register the custom metrics
 register.registerMetric(httpRequestCounter);
 register.registerMetric(httpRequestDurationHistogram);
 
-// Middleware to track HTTP requests
 function trackHttpRequests(req, res, next) {
   const end = httpRequestDurationHistogram.startTimer({
     method: req.method,

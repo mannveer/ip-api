@@ -1,9 +1,6 @@
 import { constants } from "../utils/constant.js";
 import EmailService from "../services/email/emailService.js";
 import userService from '../services/userService.js';
-import otpService from "../services/otpService.js";
-import Otp from '../models/otpModel.js';
-import Contact from "../models/contactModel.js";
 
 export const insertUser = async (req, res, next) => {
   try {
@@ -35,11 +32,11 @@ export const getUserDetails = async (req, res, next) => {
   try {
     const { email,name } = req.query;
 
-    if (!email || !name ) {
+    if (!email) {
       return res.status(400).json({ status: 'error', message: 'Email and Name is required' });
     }
 
-    const user = await userService.getDetails({ email,name });
+    const user = await userService.getDetails({ email });
     if (!user) {
       return res.status(404).json({ status: 'error', message: 'User not found' });
     }
@@ -110,8 +107,7 @@ export const sendContactEmail = async (req,res,next) =>{
   emailService.sendContactThanks()
     .then(async () => {
       console.log('Thanks email sent')
-      const contact = new Contact({name,email,message})
-      await contact.save()
+      await userService.saveContactUser({email,name,message});
       res.status(201).json({ status: 'success', message: 'Email sent successfully' });
     })
     .catch(error => {

@@ -18,9 +18,9 @@ const PurchaseSchema = new Schema({
 const UserSchema = new Schema({
   name: {
     type: String,
-    required: [true, 'Please enter your first name'],
+    required: [true, 'Please enter your name'],
     trim: true,
-    maxLength: [50, 'First name cannot exceed 50 characters']
+    maxLength: [50, 'Name cannot exceed 50 characters']
   },
   email: {
     type: String,

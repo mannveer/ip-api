@@ -30,5 +30,12 @@ class UserService {
     if (user) return user;
     else return null;
   }
+
+  async saveContactUser(userData) {
+    const contact = new Contact({name,email,message})
+    await contact.save()
+    return contact;
+  }
+    
 }
 export default new UserService();

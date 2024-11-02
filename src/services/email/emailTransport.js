@@ -1,28 +1,17 @@
 import nodemailer from 'nodemailer';
+import configs from '../../config/index.js';
 
 const createTransport = async () => {
-  if (process.env.NODE_ENV === 'production') {
     return nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
+      host: configs.email.emailHost,
+      port: configs.email.emailPort,
       // secure: true, // Use TLS
       secure: false, // Use TLS
       auth: {
-        user: process.env.APP_EMAIL_USERNAME,
-        pass: process.env.APP_EMAIL_PASSWORD
+        user: configs.email.emailUsername,
+        pass: configs.email.emailPassword
       }
     });
-  } else {
-    return nodemailer.createTransport({
-      host: process.env.DEV_EMAIL_HOST,
-      port: process.env.DEV_EMAIL_PORT,
-      secure: false, // Use STARTTLS
-      auth: {
-        user: process.env.DEV_EMAIL_USERNAME,
-        pass: process.env.DEV_EMAIL_PASSWORD
-      }
-    });
-  }
 };
 
 export default createTransport;

@@ -1,22 +1,22 @@
 import jwt from 'jsonwebtoken';
-import { jwtSecret, jwtExpiresIn } from '../config/config.js';
+import configs from '../config/index.js';
 
 
 const generateAccessToken = (user) => {
-  console.log('jwtSecret', jwtExpiresIn);
-  return jwt.sign({ id: user._id, email: user.email }, jwtSecret, { expiresIn: jwtExpiresIn });
+  console.log('jwtSecret', configs.jwt.jwtExpiresIn);
+  return jwt.sign({ id: user._id, email: user.email }, configs.jwt.jwtSecret, { expiresIn: jwtExpiresIn });
 };
 
 const generateRefreshToken = (user) => {
-  return jwt.sign({ id: user._id, email: user.email }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ id: user._id, email: user.email }, configs.jwt.jwtRefreshSecret, { expiresIn: '7d' });
 };
 
 const verifyAccessToken = (token) => {
-  return jwt.verify(token, process.env.JWT_SECRET);
+  return jwt.verify(token, configs.jwt.jwtSecret);
 };
 
 const verifyRefreshToken = (token) => {
-  return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+  return jwt.verify(token, configs.jwt.jwtRefreshSecret);
 };
 
 export { generateAccessToken, generateRefreshToken, verifyAccessToken, verifyRefreshToken };

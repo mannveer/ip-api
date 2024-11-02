@@ -1,12 +1,13 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
+import logger from '../utils/logger.js';
+import { isPaymentSuccessCheck } from '../services/paymentService.js';
+import configs from '../config/index.js';
 
-const key_id = process.env.RAZORPAY_KEY_ID;
-const key_secret = process.env.RAZORPAY_KEY_SECRET;
 
 const razorpay = new Razorpay({
-  key_id: key_id,
-  key_secret: key_secret,
+  key_id: configs.razorpay.key_id,
+  key_secret: configs.razorpay.key_secret,
 });
 
 
@@ -31,7 +32,7 @@ export const verifyPayment = (req, res) => {
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
   const generatedSignature = crypto
-    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+    .createHmac('sha256', configs.razorpay.key_secret)
     .update(`${razorpay_order_id}|${razorpay_payment_id}`)
     .digest('hex');
 
@@ -41,3 +42,19 @@ export const verifyPayment = (req, res) => {
     res.status(400).json({ success: false, message: 'Payment verification failed' });
   }
 };
+
+export const isPaymentSuccess = async (req, res) => {
+  try {
+    logger.info('Inside isPaymentSuccess and Fetching payment:', req.query);
+    const { razorpay_payment_id, email, file } = req.query;
+    const payment = await razorpay.payments.fetch(razorpay_payment_id);
+    const isPaymentSuccess = await isPaymentSuccessCheck(email, payment.order_id, file);
+    if (payment.status === 'captured' && isPaymentSuccess) {
+      res.json({ success: true, payment });
+    }
+  } catch (error) {
+    logger.error('Error fetching payment:', error);
+    console.error('Error fetching payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+}

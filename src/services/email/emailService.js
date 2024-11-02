@@ -1,13 +1,13 @@
 import createTransport from './emailTransport.js';
 import emailTemplates from './emailTemplates.js';
 import logger from '../../utils/logger.js';
-import { name } from 'ejs';
+import configs from '../../config/index.js';
 
 class EmailService {
   constructor(user, url) {
     this.to = user.email;
     this.url = url;
-    this.from = process.env.EMAIL_FROM;
+    this.from = configs.email.emailFrom;
   }
 
   async send(subject, templateName,binddata) {
