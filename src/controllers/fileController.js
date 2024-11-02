@@ -1,15 +1,5 @@
-// import {getFileFromDB, fetchAllFiles} from '../services/fileService.js';
-// import {deleteFileFromCloudinary,uploadOnCloudinary} from '../utils/cloudinary.js';
 import {getFilePath, getFile1,getFileInfo,getAllFilesInfo,deleteFile, insertFileInfo, createDirectory, getFilePaths } from '../services/fileService.js';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
-
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
-// const FILES_DIR_PATH = path.join(__dirname, '..', '..', 'DeliveryFiles', 'files');
-// const SAMPLE_FILES_DIR_PATH = path.join(__dirname, '..', '..', 'DeliveryFiles', 'sample-files');
-// const PREVIEW_FILES_DIR_PATH = path.join(__dirname, '..', '..', 'DeliveryFiles', 'preview-files');
 
 const DELIVERY_FILES_DIR = path.join(process.cwd(), 'DeliveryFiles');
 const FILES_DIR_PATH = path.join(DELIVERY_FILES_DIR, 'files');
@@ -18,7 +8,6 @@ const PREVIEW_FILES_DIR_PATH = path.join(DELIVERY_FILES_DIR, 'preview-files');
 
 export const uploadFile = async (req, res) => {
     try {
-        console.log(req.body)
 
         if (!req.file) {
             return res.status(400).send({ message: 'No file uploaded' });
@@ -36,8 +25,8 @@ export const uploadFile = async (req, res) => {
             mimetype: file.mimetype,
             description: file.description ?? '',
             price: file.price ?? 0,
-            sampleFiles: file.sampleFiles ?? [],
-            samplefilesdirpath: SAMPLE_FILES_DIR_PATH + file.filename
+            // sampleFiles: file.sampleFiles ?? [],
+            // samplefilesdirpath: SAMPLE_FILES_DIR_PATH + file.filename
             };
 
             await createDirectory(SAMPLE_FILES_DIR_PATH,file.filename);
@@ -62,13 +51,10 @@ export const uploadFile = async (req, res) => {
 export const getSampleFileByFileName = async (req, res, next) => {
     try {
         const fileName = req.params.filename;
-        console.log(`Inside getSampleFileByFileName...`)
-
-        console.log(`SAMPLE_FILES_DIR_PATH is ${SAMPLE_FILES_DIR_PATH} and fileName is ${fileName}`)
         const filePaths = await getFilePaths(path.join(SAMPLE_FILES_DIR_PATH, fileName));
             if (!filePaths || filePaths.length === 0) {
                 return res.status(404).send('File not found');
-              }
+            }
         // res.sendFile(filePaths);
         const fileUrls = filePaths.map(filePath => {
             return `${req.protocol}://${req.get('host')}/api/v1/file/file-sample/${fileName}/${path.basename(filePath)}`;
@@ -84,13 +70,13 @@ export const getSampleFileByFileName = async (req, res, next) => {
 }
 
 export const getFile = async (req, res) => {
-    try {
-        const filePath = req.params.type === 'sample' ? path.join(SAMPLE_FILES_DIR_PATH, req.params.filename) : FILES_DIR_PATH;
-        req.params.filename = req.params.type === 'sample' ? req.params.filename+".zip" : req.params.filename;
-        await getFile1(filePath, req.params.filename, res);
-    } catch (error) {
-        res.status(500).json({message: error.message});
-    }
+  try {
+    const baseDir = req.params.type === 'sample' ? SAMPLE_FILES_DIR_PATH : FILES_DIR_PATH;
+    const fileName = req.params.type === 'sample' ? `${req.params.filename}.zip` : req.params.filename;
+    await getFile1(baseDir, fileName, res);
+  } catch (error) {
+    res.status(500).json({message: error.message});
+  }
 }
 
 export const getFileDetails = async (req, res) => {
@@ -105,15 +91,13 @@ export const getFileDetails = async (req, res) => {
 
 export const getAllFilesDetails = async (req, res) => {
     try {
-        console.log("Searching files at - ", FILES_DIR_PATH)
+      console.log("FILES_DIR_PATH - ",FILES_DIR_PATH)
         const filesInfo = await getAllFilesInfo(FILES_DIR_PATH);
         res.status(200).json(filesInfo);
     } catch (error) {
         if(error.statusCode)
         res.status(error.statusCode).json({message: error.message});
         else
-        res.status(500).json({message: error.message});
-
         res.status(500).json({message: error.message});
     }
 }
@@ -156,44 +140,3 @@ export const getFilePreview = async (req, res, next) => {
       next(error);
     }
   };
-
-
-
-
-  // export const getAllFiles = async (req,res) => {
-  //   try {
-  //     const files = await fetchAllFiles();
-  //     res.json(files);
-  //   }
-
-  //   catch (error) {
-  //     console.error('Error retrieving files:', error);
-  //     res.status(500).json({ message: 'Error retrieving files' });
-  //   }
-  // };
-
-  // export const deleteFile = (req,res) =>{
-  //   const {publicId} = req.params;
-  //   deleteFileFromCloudinary(publicId)
-  //   .then((result) => {
-  //     console.log('File deleted successfully from cloudinary:', result);
-  //     res.json({ message: 'File deleted successfully' , result});
-  //   })
-  //   .catch((error) => {
-  //     console.error('Error deleting file:', error);
-  //     res.status(500).json({ message: 'Error deleting file' });
-  //   });
-  // }
-
-  // export const getFile = (req,res) =>{
-  //   const {publicId} = req.params;
-  //   getFileFromCloudinary(publicId)
-  //   .then((result) => {
-  //     console.log('File retrieved successfully from cloudinary:', result);
-  //     res.json(result);
-  //   })
-  //   .catch((error) => {
-  //     console.error('Error retrieving file:', error);
-  //     res.status(500).json({ message: 'Error retrieving file' });
-  //   });
-  //   }
