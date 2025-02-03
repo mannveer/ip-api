@@ -1,7 +1,7 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import logger from '../utils/logger.js';
-import { isPaymentSuccessCheck } from '../services/paymentService.js';
+// import { isPaymentSuccessCheck } from '../services/paymentService.js';
 import configs from '../config/index.js';
 
 
@@ -19,9 +19,17 @@ export const createOrder = async (req, res) => {
       amount,
       currency,
       receipt,
+      notes:{
+        email: req.user.email,
+        file: req.body.fileid
+      }
     };
     const order = await razorpay.orders.create(options);
-    res.json(order);
+    if (order && order.id) {
+      res.json(order);
+    } else {
+      throw new Error('Failed to create order');
+    }
   } catch (error) {
     console.error('Error creating order:', error);
     res.status(500).json({ error: error.message });
@@ -48,7 +56,7 @@ export const isPaymentSuccess = async (req, res) => {
     logger.info('Inside isPaymentSuccess and Fetching payment:', req.query);
     const { razorpay_payment_id, email, file } = req.query;
     const payment = await razorpay.payments.fetch(razorpay_payment_id);
-    const isPaymentSuccess = await isPaymentSuccessCheck(email, payment.order_id, file);
+    // const isPaymentSuccess = await isPaymentSuccessCheck(email, payment.order_id, file);
     if (payment.status === 'captured' && isPaymentSuccess) {
       res.json({ success: true, payment });
     }

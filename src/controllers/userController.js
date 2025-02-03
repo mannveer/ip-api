@@ -1,17 +1,25 @@
 import { constants } from "../utils/constant.js";
 import EmailService from "../services/email/emailService.js";
 import userService from '../services/userService.js';
+import { driveServiceInstance } from "../utils/gDrive.js";
+import { getFileInfo, getFileInfo1 } from "../services/fileService.js";
+import { isPaymentSuccess, isPaymentSuccess1 } from "../services/paymentService.js";
 
 export const insertUser = async (req, res, next) => {
   try {
     const { email,name,purchase } = req.body;
 
-    if(!email || !name ){
-      return res.status(400).json({ status: 'error', message: 'Email and Name is required' });
+    if(email !== req.user.email){
+      return res.status(401).json({ status: 'error', message: 'User does not match' });
     }
 
-    const { user,token } = await userService.inserData({ email,name,purchase });
+    const alreadypaid = await isPaymentSuccess1(purchase.orderid,purchase.paymentid,email,purchase.fileid,req.user);
+    if(alreadypaid) res.status(409).json({ status: 'error', message: 'payment id error' });
 
+    const { user,token } = await userService.inserData({ email,name,purchase });
+    
+    const fileinfo = await getFileInfo1(purchase.fileid);
+    await driveServiceInstance.shareFile(fileinfo.googleDrive.fileId,email);
     const emailService = new EmailService(user, `${constants.emailVerificationUrl}`);
     emailService.sendWelcome()
       .then(() => {
@@ -30,17 +38,13 @@ export const insertUser = async (req, res, next) => {
 
 export const getUserDetails = async (req, res, next) => {
   try {
-    const { email,name } = req.query;
+    const { email,name,fileid } = req.query;
 
-    if (!email) {
-      return res.status(400).json({ status: 'error', message: 'Email and Name is required' });
-    }
-
-    const user = await userService.getDetails({ email });
-    if (!user) {
+    const {user,filePurchase} = await userService.getDetails({ email,fileid });
+    if (!filePurchase) {
       return res.status(404).json({ status: 'error', message: 'User not found' });
     }
-    res.status(200).json({ status: 'success', data: { user } });
+    res.status(200).json({ status: 'success', data: filePurchase });
 
     // const emailService = new EmailService(user, `${constants.emailVerificationUrl}`);
     // emailService.sendWelcome()
@@ -60,24 +64,28 @@ export const getUserDetails = async (req, res, next) => {
 
 export const emailFile = async (req, res, next) => {
   try {
-    const { userid,fileid } = req.body;
-    if(!userid){
-      return res.status(400).json({ status: 'error', message: 'User Id is required' });
+    const { email,fileid } = req.body;
+    if(!email || !fileid){
+      return res.status(400).json({ status: 'error', message: 'Email and FileId is required' });
     }
 
-    const user = await userService.getDetailsById(userid);
+    const user = await userService.getDetailsByEmail(email);
 
     if (!user) {
       return res.status(404).json({ status: 'error', message: 'User not found' });
     }
 
     const filedetails = user.purchases.find(element => {
-      return element.fileid === fileid;      
+      return element.purchase.fileid === fileid && element.purchase.status === 'success';      
     });
 
     if (!filedetails) {
       return res.status(404).json({ status: 'error', message: 'User do not have access to the specified file.' });
     }
+
+    const fileinfo = await getFileInfo1(fileid);
+    console.log(fileinfo)
+    await driveServiceInstance.shareFile(fileinfo.googleDrive.fileId,email);
 
     const emailService = new EmailService(user, `${constants.emailVerificationUrl}`);
     emailService.sendWelcome()

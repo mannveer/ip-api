@@ -4,6 +4,7 @@ export const handleError = (err, req, res, next) => {
         status: 'error',
         statusCode,
         message,
+        err,
         data
     });
 };

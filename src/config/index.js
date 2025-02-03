@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { google } from 'googleapis';
 // import defaultConfig from './env/default.js';
 
 // dotenv.config(); // Loads environment variables from `.env` file
@@ -22,6 +23,12 @@ const configs = {
         cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
         api_key: process.env.CLOUDINARY_API_KEY,
         api_secret: process.env.CLOUDINARY_API_SECRET
+    },
+    cloudindarydrive:{
+        projectFolderName : process.env.CLOUDINDARY_DRIVE_PROJECT_FOLDER_NAME,
+        filesFolderName : process.env.CLOUDINDARY_DRIVE_FILES_FOLDER_NAME,
+        sampleFolderName : process.env.CLOUDINDARY_DRIVE_SAMPLE_FOLDER_NAME,
+        previewFolderName : process.env.CLOUDINDARY_DRIVE_PREVIEW_FOLDER_NAME,
     },
     jwt: {
         jwtSecret : process.env.JWT_SECRET || 'your_jwt_secret',
@@ -74,10 +81,24 @@ const configs = {
         bucketName : process.env.AWS_BUCKET_NAME
     },
     google:{
+        drive:process.env.GOOGLE_DRIVE_SERVICE,
         clientId : process.env.GOOGLE_CLIENT_ID,
         clientSecret : process.env.GOOGLE_CLIENT_SECRET,
         redirectUri : process.env.GOOGLE_REDIRECT_URI
-    }
+    },
+    googleDrive:{
+        filesFolderId : process.env.GOOGLE_DRIVE_FILES_FOLDER_ID,
+        sampleFolderId : process.env.GOOGLE_DRIVE_SAMPLE_FOLDER_ID,
+        previewFolderId : process.env.GOOGLE_DRIVE_PREVIEW_FOLDER_ID,
+        driveFolderId : process.env.GOOGLE_DRIVE_FOLDER_ID
+    },
+    multer:{
+        dest : process.env.MULTER_DEST || 'uploads',
+        storage: process.env.MULTER_STORAGE || 'local',
+        limits : {
+            fileSize : process.env.MULTER_FILE_SIZE || 1024 * 1024 * 5
+        }
+    },
 };
 
 export default configs;
