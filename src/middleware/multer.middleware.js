@@ -1,21 +1,20 @@
 import multer from "multer";
+import configs from "../config/index.js";
+
 import path from 'path';
+
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 
-const storage = multer.diskStorage({
+const storage1 = multer.diskStorage({
     destination: function (req, file, cb) {
         // const dirPath = req.body.dirpath;
-        const dirPath = "files";
-        if (!dirPath) {
+        const fullPath = "./DeliveryFiles/files";
+        if (!fullPath) {
             return cb(new Error('No directory path specified'), null);
-        }
-
-        // const fullPath = path.join(__dirname, '..', '..', 'DeliveryFiles', dirPath);
-        const fullPath = './DeliveryFiles/'+dirPath
-        
+        }        
         cb(null, fullPath);
     },
 
@@ -25,5 +24,14 @@ const storage = multer.diskStorage({
     }
 });
 
+const storage2 = multer.memoryStorage({
+    filename: function (req, file, cb) {
+        console.log("file ---- ", file);
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname);
+    }
+});
 
-export const upload = multer({storage})
+
+
+export const upload = multer({ storage: configs.multer.storage === 'local' ? storage1:storage2 });

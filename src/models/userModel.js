@@ -3,22 +3,23 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const PurchaseSchema = new Schema({
-  filename: String,
-  purchase: {
-    fileid: String,
-    entity: String,
-    amount: Number,
-    currency: String,
-    status: String,
-    paymentid: String,
-    created_at: Number
-  }
+  fileid: {
+    type: Schema.Types.ObjectId,
+    ref: 'File'
+  },
+  entity: String,
+  amount: Number,
+  currency: String,
+  status: String,
+  orderid:String,
+  paymentid: String,
+  created_at: Number
 });
 
 const UserSchema = new Schema({
   name: {
     type: String,
-    required: [true, 'Please enter your name'],
+    // required: [true, 'Please enter your name'],
     trim: true,
     maxLength: [50, 'Name cannot exceed 50 characters']
   },

@@ -4,7 +4,7 @@ import configs from '../config/index.js';
 
 const generateAccessToken = (user) => {
   console.log('jwtSecret', configs.jwt.jwtExpiresIn);
-  return jwt.sign({ id: user._id, email: user.email }, configs.jwt.jwtSecret, { expiresIn: jwtExpiresIn });
+  return jwt.sign({ id: user._id, email: user.email }, configs.jwt.jwtSecret, { expiresIn: configs.jwt.jwtExpiresIn });
 };
 
 const generateRefreshToken = (user) => {

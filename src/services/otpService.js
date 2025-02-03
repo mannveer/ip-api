@@ -11,6 +11,7 @@ class OtpService {
   async generateOTP() {
     try {
       const otpNumber = Math.floor(Math.pow(10, configs.otp.OtpLength - 1) + Math.random() * 9 * Math.pow(10, configs.otp.OtpLength - 1)).toString();
+      console.log('OTP generated:', otpNumber);
       const otpHash = hashOtp(otpNumber);
       return { otpHash, otpNumber };
     } catch (error) {
@@ -198,7 +199,7 @@ class OtpService {
       //   { new: true, upsert: true }
       // );
 
-      const user = await User.findOne({email});
+      let user = await User.findOne({email});
       if(!user){
         try{
           user = await new User({
@@ -216,6 +217,7 @@ class OtpService {
           otpDocument.updatedAt = prevUpdate;
           otpDocument.attempts = prevAttempts;
           await otpDocument.save();
+          console.error('Failed to create new user:', err);
           throw new AppError('Failed to create new user', 500);
         }
       }

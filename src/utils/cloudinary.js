@@ -1,67 +1,160 @@
-import {v2 as cloudinary} from 'cloudinary';
-import fs from 'fs';
+import { v2 as cloudinary } from 'cloudinary';
+import fs from 'fs/promises'; // Use promises for fs operations
 import configs from '../config/index.js';
+import axios from 'axios';
 
-cloudinary.config({
-    cloud_name: configs.cloudindary.cloud_name,
-    api_key: configs.cloudindary.api_key,
-    api_secret: configs.cloudindary.api_secret
-});
+class CloudinaryService {
+  constructor() {
+    cloudinary.config({
+      cloud_name: configs.cloudindary.cloud_name,
+      api_key: configs.cloudindary.api_key,
+      api_secret: configs.cloudindary.api_secret,
+    });
+  }
 
-const uploadOnCloudinary = async (localFilePath) =>{
+  async uploadFileBuffer (fileBuffer, folder, fileName) {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: folder,
+          public_id: fileName,
+          resource_type: 'auto',
+        },
+        (error, result) => {
+          if (error) {
+            return reject(error);
+          }
+          resolve(result);
+        }
+      );
+  
+      // Write the file buffer to the upload stream
+      uploadStream.end(fileBuffer);
+    });
+  };
+  
+  async createSubFolder(parentFolder, subFolder) {
     try {
-        if(!localFilePath) return new Error('Please provide a valid file path');
+      console.log('Creating subfolder:', parentFolder+subFolder);
+      const folderPath = `${parentFolder}/${subFolder}`;
+      const response = await cloudinary.api.create_folder(folderPath);
+      console.log('Subfolder created successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('Error creating subfolder:', error.message);
+      throw error;
+    }
+  }
 
-        console.log("Uploading file on cloudinary - ", localFilePath);
-        const response = await cloudinary.uploader.upload(localFilePath,{
-            resource_type: "auto"
+  async upload(localFilePath, uploadToFolder) {
+    if (!localFilePath) throw new Error('Please provide a valid file path');
+    if (!uploadToFolder) throw new Error('Please provide a valid folder name');
+  
+    try {
+      console.log("Uploading file to Cloudinary:", localFilePath);
+  
+      const response = await cloudinary.uploader.upload(localFilePath, {
+        resource_type: 'auto', // Automatically detect the file type (image, video, etc.)
+        folder: uploadToFolder, // Specify the folder where the file should be uploaded
+      });
+  
+      console.log("File uploaded successfully:", response);
+      return response;
+    } catch (error) {
+      console.error("Error during upload:", error);
+      // Attempt to delete the local file if an error occurs
+      await fs.unlink(localFilePath).catch((err) =>
+        console.error("Error deleting file:", err)
+      );
+      throw error;
+    }
+  }
+  
+
+  async getFile(publicId) {
+    try {
+      const result = await cloudinary.api.resource(publicId);
+      return result;
+    } catch (error) {
+      console.error("Error fetching file from Cloudinary:", error);
+      throw error;
+    }
+  }
+
+
+  async fetchFileStream (fileUrl){
+    try {
+      const response = await axios({
+        url: fileUrl,
+        method: 'GET',
+        responseType: 'stream', 
+      });
+  
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching file from Cloudinary:', error);
+      throw error; // Re-throw the error to handle it where the function is called
+    }
+  };
+  
+
+  async getAllFiles() {
+    try {
+      const result = await cloudinary.api.resources();
+      return result.resources;
+    } catch (error) {
+      console.error("Error fetching files from Cloudinary:", error);
+      throw error;
+    }
+  }
+
+  async deleteFile(publicId) {
+    try {
+      const result = await cloudinary.uploader.destroy(publicId);
+      return result;
+    } catch (error) {
+      console.error("Error deleting file from Cloudinary:", error);
+      throw error;
+    }
+  }
+
+  async getAllFilesInFolder(folderPath) {
+    try {
+      let resources = [];
+      let nextCursor = null;
+  
+      do {
+        const response = await cloudinary.api.resources({
+          type: 'upload',           // Fetch only uploaded files
+          prefix: folderPath,       // Folder path (includes subfolders)
+          max_results: 500,         // Maximum files per request (limit is 500)
+          next_cursor: nextCursor,  // Cursor for pagination
         });
-        console.log("File uploaded successfully on cloudinary - ", response);
-        return response;
+  
+        resources = resources.concat(response.resources); // Add fetched files
+        nextCursor = response.next_cursor;               // Update cursor
+      } while (nextCursor); // Loop until all files are fetched
+  
+      return resources;
+    } catch (error) {
+      console.error('Error fetching files:', error);
+      throw error;
     }
-    catch (error) {
-        fs.unlinkSync(localFilePath);
-        throw new Error(error);
-        console.log(error);
+  }
+  
+
+  async getFileFromFolder(folder) {
+    try {
+      const result = await cloudinary.api.resources({
+        type: 'upload',
+        prefix: folder,
+      });
+      return result.resources;
+    } catch (error) {
+      console.error("Error fetching files from Cloudinary:", error);
+      throw error;
     }
+  }
 }
-
-const getFileFromCloudinary = (publicId) => {
-    return new Promise((resolve, reject) => {
-      cloudinary.api.resource(publicId, (error, result) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(result);
-        }
-      });
-    });
-  };
-
-  const getAllFilesFromCloudinary = () => {
-    return new Promise((resolve, reject) => {
-      cloudinary.api.resources((error, result) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(result.resources);
-        }
-      });
-    });
-  };
-
-
-  const deleteFileFromCloudinary = (publicId) => {
-    return new Promise((resolve, reject) => {
-      cloudinary.uploader.destroy(publicId, (error, result) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(result);
-        }
-      });
-    });
-  };
-
-
-export {uploadOnCloudinary,deleteFileFromCloudinary,getAllFilesFromCloudinary,getFileFromCloudinary}
+export const cloudinaryServiceInstance = new CloudinaryService();
+// export default CloudinaryService;

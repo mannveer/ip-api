@@ -12,7 +12,6 @@ class EmailService {
 
   async send(subject, templateName,binddata) {
     const transport = await createTransport();
-    console.log('templateName',templateName);
     const template = await emailTemplates.getTemplate(templateName,binddata);
 
     const mailOptions = {
