@@ -18,6 +18,7 @@ export const protect = async (req, res, next) => {
 
     const decoded = await promisify(jwt.verify)(token, configs.jwt.jwtSecret);
     const currentUser = await User.findById(decoded.id);
+    // const currentUser = await User.findById(decoded.id).populate('purchases').lean();
 
     if (!currentUser) {
       return next(new AppError('Authentication failed: User no longer exists.', 401));

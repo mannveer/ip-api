@@ -8,7 +8,8 @@ const router = express.Router();
 router.post('/insert', protect, validateInsertUser(), validate, insertUser);
 router.get('/info',protect, userSignupValidationRules(), validate, getUserDetails);
 router.post('/emailfile',protect, emailFile);
-router.post('/send-contact-email',protect, sendContactEmail);
+// router.post('/send-contact-email',protect, sendContactEmail);
+router.post('/send-contact-email', sendContactEmail);
 router.get('/session', protect, async (req, res) => {
     res.status(200).json({ msg: "session active" });
 });

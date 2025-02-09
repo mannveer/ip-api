@@ -14,16 +14,17 @@ const razorpay = new Razorpay({
 export const createOrder = async (req, res) => {
   try {
     console.log('Create order request:', req.body);
-    const { amount, currency, receipt } = req.body;
+    const { amount, currency, receipt,fileid } = req.body;
     const options = {
       amount,
       currency,
       receipt,
       notes:{
         email: req.user.email,
-        file: req.body.fileid
+        fileId: fileid
       }
     };
+    console.log('Create order options:', options);
     const order = await razorpay.orders.create(options);
     if (order && order.id) {
       res.json(order);

@@ -7,6 +7,7 @@ import { cloudinaryServiceInstance } from '../utils/cloudinary.js';
 import logger from '../utils/logger.js';
 import { driveServiceInstance } from "../utils/gDrive.js";
 import configs from '../config/index.js';
+import { file } from 'googleapis/build/src/apis/file/index.js';
 
 
 export const createDirectory = async (dirPaths) => {
@@ -54,20 +55,19 @@ export const getFilesInfo = async (dirPath = null) => {
   try {
     const query = configs.multer.storage === 'local' ? { dirpath: dirPath, isDeleted: false } : { dirpath: 'NA', isDeleted: false };
     let filesInfo = await File.find(query).select('-dirpath -googleDrive -cloudinary -isDeleted');
+    if(filesInfo.length === 0){
+      return [];
+    }
 
     if(configs.multer.storage === 'cloudinary'){
       filesInfo = await getAllCloudinaryFilesUrl(configs.cloudindarydrive.previewFolderName, filesInfo);
     }
 
-
-    if (!filesInfo.length) {
-      throw new AppError('No files found', 404);
-    }
     logger.info('Successfully retrieved files info', filesInfo);
     return filesInfo;
   } catch (error) {
     logger.error(`Error retrieving files info: ${error.message}`);
-    throw error;
+    return [];
   }
 };
 
@@ -403,31 +403,21 @@ export const getCloudinaryFilesFromFolder = async (folder) => {
 export const getAllCloudinaryFilesUrl = async (dirPath, filesArr) => {
   try {
     const files = await cloudinaryServiceInstance.getAllFilesInFolder(dirPath);
-    if (!files.length) {
-      throw new AppError('No files found', 404);
+
+    if (files.length === 0) {
+      return filesArr;
     }
+    logger.info(`Fetched ${files.length} files from Cloudinary folder: ${dirPath}`);
 
-    const files1 = files.reduce((acc, file) => {
-      const fileName = file.asset_folder.slice(configs.cloudindarydrive.previewFolderName.length + 1);
-      const matchedFile = filesArr.find(x => x.filename === fileName);
-      if (matchedFile) {
-      acc.push({
-        ...matchedFile.toObject(),
-        previewUrl: file.secure_url
-      });
-      }
-      return acc;
-    }, []);
+    const fileMap = new Map(files.map(file => [file.asset_folder.slice(configs.cloudindarydrive.previewFolderName.length + 1), file.secure_url]));
 
-    if (!files1.length) {
-      throw new AppError('No files found', 404);
-    }
-
-    logger.info(`Fetched ${files1.length} files from Cloudinary folder: ${dirPath}`);
-    return files1;
+    filesArr.forEach(file => {
+      file.previewUrl = fileMap.get(file.filename) || "";
+    });
+    return filesArr;
   } catch (error) {
     logger.error(`Error fetching files from Cloudinary folder: ${error.message}`);
-    throw new AppError('Error fetching files from Cloudinary folder', 500);
+    return filesArr;
   }
 }
 

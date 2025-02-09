@@ -2,6 +2,7 @@ import otpService from '../services/otpService.js';
 import EmailService from '../services/email/emailService.js';
 import { constants } from '../utils/constant.js';
 import logger from '../utils/logger.js'; // Adjust the import path as necessary
+import { generateRefreshToken } from '../utils/jwt.js';
 
 export const validationMiddleware = (req, res, next) => {
   const { email, purpose } = req.body;
@@ -47,13 +48,13 @@ export const validateOtp = async (req, res, next) => {
     const result = await otpService.validateOTPData(otp, email, purpose,name);
 
     if (result !== constants.success) {
-  //   const refreshToken = generateRefreshToken(payload);
-  //   res.cookie('refreshToken', refreshToken, {
-  //     httpOnly: true,
-  //     secure: true,
-  //     sameSite: 'strict',
-  //     maxAge: 7 * 24 * 60 * 60 * 1000
-  //    });
+    const refreshToken = generateRefreshToken(payload);
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+     });
       return res.status(200).json({ message: 'OTP validated successfully', accessToken: result.accessToken });
     }
 

@@ -1,9 +1,9 @@
 import User from "../models/userModel.js";
 import Razorpay from 'razorpay';
-import crypto from 'crypto';
 import AppError from '../utils/errorHandler.js';
 import configs from '../config/index.js'
 import logger from '../utils/logger.js';
+import Purchase from "../models/paymentModel.js";
 
 const razorpay = new Razorpay({
   key_id: configs.razorpay.key_id,
@@ -31,33 +31,6 @@ export const isPaymentSuccessDb = async (email,pid,fileid) => {
   }
 }
 
-export const isPaymentSuccess = async (pid, email, fileid) => {
-  try {
-    logger.info('Inside isPaymentSuccess and Fetching payment');
-
-    if(!email || !pid || !fileid){
-      throw new AppError('Payment ID and email is required',500);
-    }
-
-    const payment = await razorpay.payments.fetch(pid);
-    if (!payment) {
-      throw new AppError('Payment not found', 404);
-    }
-    if (payment.email !== email) {
-      throw new AppError('Email and Payment ID do not match', 400);
-    }
-    if (payment.status !== 'captured') {
-      throw new AppError('Payment not captured or invalid', 400);
-    }
-
-    const alreadyProcessed = await isPaymentSuccessDb(email, payment.order_id, fileid, pid);
-    return alreadyProcessed;
-
-  } catch (error) {
-    logger.error('Error fetching payment:', error);
-    throw new AppError("Error fetching payment", 500)
-  }
-}
 
 export const isPaymentSuccess1 = async (oid, pid, email, fileid, reqUser) => {
   try {
@@ -71,15 +44,24 @@ export const isPaymentSuccess1 = async (oid, pid, email, fileid, reqUser) => {
     if (!payment) {
       throw new AppError('Payment not found', 404);
     }
-    if (payment.email !== email) {
+    if (payment.email !== email || payment.notes.email !== email) {
       throw new AppError('Email and Payment ID do not match', 400);
     }
+
+    if(payment.notes.fileId !== fileid){
+      throw new AppError('File ID does not match',400);
+    }
+
     if (payment.status !== 'captured') {
       throw new AppError('Payment not captured or invalid', 400);
     }
-    const a = reqUser.purchases.find(purchase => purchase.orderid === oid && purchase.paymentid === pid && purchase.status === 'success' && purchase.fileid === fileid);
-    return reqUser.purchases.find(purchase => purchase.orderid === oid && purchase.paymentid === pid && purchase.status === 'success' && purchase.fileid === fileid);
 
+    const purchases = await fetchPaymentDB1(reqUser._id, fileid);
+    
+    if(!purchases || purchases.length === 0){
+      return {payment, alreadyProcessed: false};
+    }
+    return {payment, alreadyProcessed: true};
 
   } catch (error) {
     logger.error('Error fetching payment:', error);
@@ -105,3 +87,61 @@ export const isValidPaymentId = async (pid) => {
 };
 
 
+export const fetchPaymentDB = async (user_id) => {
+  try {
+    if (!user_id) {
+      throw new Error('User ID is required');
+    }
+
+    const purchases = await Purchase.find({ user_id })
+      .select('-__v') // Exclude unnecessary fields
+      .lean();
+
+    if (!purchases || purchases.length === 0) {
+      return [];
+    }
+
+    return purchases;
+  } catch (err) {
+    logger.error(`Error fetching purchases for user ${user_id}:`, err);
+    return [];
+  }
+};
+
+export const fetchPaymentDB1 = async (user_id, fileid) => {
+  try {
+    if (!user_id || !fileid) {
+      throw new Error('User ID and File ID are required');
+    }
+
+    const purchases = await Purchase.find({ user_id, 'notes.fileId': fileid })
+      .select('-__v')
+      .lean();
+
+    return purchases;
+  } catch (err) {
+    logger.error(`Error fetching purchases for user ${user_id} and file ${fileid}:`, err);
+    return [];
+  }
+};
+
+export const insertPaymentDB = async (userid,paymentData) => {
+  try {
+    if (!userid || !paymentData) {
+      throw new Error('User ID and payment data are required');
+    }
+
+    const purchase = new Purchase({
+      user_id: userid,
+      ...paymentData
+    });
+
+    await purchase.save();
+    return purchase;
+  } catch (err) {
+    logger.error(`Error inserting purchase for user ${userid}:`, err);
+    return null;
+  }
+}
+
+  
