@@ -9,6 +9,7 @@ import paymentRouter from './routes/paymentRoutes.js';
 import otpRouter from './routes/otpRoutes.js';
 import userRouter from './routes/userRoutes.js';
 import configs from './config/index.js';
+import projectRoutes from './routes/projectRoutes.js';
 
 const app = express();
 
@@ -29,6 +30,8 @@ app.use('/api/v1/file', fileRouter);
 app.use('/api/v1/payment', paymentRouter);
 app.use('/api/v1/otp', otpRouter);
 app.use('/api/v1/user', userRouter);
+app.use('/api/v1/projects', projectRoutes);
+
 
 app.options('*', (req, res) => {
     res.header('Access-Control-Allow-Origin', req.headers.origin);

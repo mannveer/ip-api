@@ -1,6 +1,5 @@
 import { file } from 'googleapis/build/src/apis/file/index.js';
 import User from '../models/userModel.js';
-import { generateAccessToken } from '../utils/jwt.js';
 
 class UserService {
     async inserData(userData) {
