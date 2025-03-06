@@ -1,15 +1,16 @@
 import express from 'express';
+import { Request, Response } from 'express';
 import bodyParser from 'body-parser';
-import corsConfig from './middleware/corsConfig.js';
-import { handleError } from './middleware/errorHandler.js';
-import { trackHttpRequests, exposeMetrics } from './metrics/metrics.js';
-import { apiRateLimiter } from './middleware/rateLimiter.js';
-import fileRouter from './routes/fileRoutes.js';
-import paymentRouter from './routes/paymentRoutes.js';
-import otpRouter from './routes/otpRoutes.js';
-import userRouter from './routes/userRoutes.js';
-import configs from './config/index.js';
-import projectRoutes from './routes/projectRoutes.js';
+import corsConfig from './middleware/corsConfig';
+import { handleError } from './middleware/errorHandler';
+import { trackHttpRequests, exposeMetrics } from './metrics/metrics';
+import { apiRateLimiter } from './middleware/rateLimiter';
+import fileRouter from './routes/file.route';
+import paymentRouter from './routes/payment.route';
+import otpRouter from './routes/otp.route';
+import userRouter from './routes/user.route';
+import configs from './config/index';
+import projectRoutes from './routes/project.route';
 
 const app = express();
 
@@ -43,6 +44,6 @@ app.options('*', (req, res) => {
 
 app.use(handleError);
 
-app.get('/', (req, res) => res.json({ message: `Welcome to ${configs.appName}!` }));
+app.get('/', (req:Request, res:Response) => res.json({ message: `Welcome to ${configs.appName}!` }));
 
 export default app;

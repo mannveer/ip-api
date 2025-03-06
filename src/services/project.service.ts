@@ -1,4 +1,4 @@
-import Project from '../models/projectModel.js';
+import Project from '../models/project.model.js';
 import AppError from '../utils/errorHandler.js';
 
 class ProjectService {

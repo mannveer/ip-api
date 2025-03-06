@@ -1,5 +1,5 @@
 import express from 'express';
-import {getFile, uploadFile, deleteFileAndDetails, getAllFilesDetails, getFileDetails, getFilePreview, getSampleFileByFileName, getFileSample, uploadFilesOnGoogleDrive, test, streamFile, deleteAllFilesAndDetails, uploadFilesOnCloudinary, uploadFilesOnGoogleDriveCloudinary} from '../controllers/fileController.js';
+import {getFile, uploadFile, deleteFileAndDetails, getAllFilesDetails, getFileDetails, getFilePreview, getSampleFileByFileName, getFileSample, uploadFilesOnGoogleDrive, test, streamFile, deleteAllFilesAndDetails, uploadFilesOnCloudinary, uploadFilesOnGoogleDriveCloudinary} from '../controllers/file.controller.js';
 import {upload} from '../middleware/multer.middleware.js';
 // import { cache } from '../middleware/cacheMiddleware.js';
 

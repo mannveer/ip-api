@@ -1,4 +1,4 @@
-import { createOrder,isPaymentSuccess,verifyPayment } from "../controllers/paymentController.js";
+import { createOrder,isPaymentSuccess,verifyPayment } from "../controllers/payment.controller.js";
 import express from "express";
 import { protect } from "../middleware/authMiddleware.js";
 const router = express.Router();

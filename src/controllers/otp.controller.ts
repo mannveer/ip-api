@@ -1,4 +1,4 @@
-import otpService from '../services/otpService.js';
+import otpService from '../services/otp.service.js';
 import EmailService from '../services/email/emailService.js';
 import { constants } from '../utils/constant.js';
 import logger from '../utils/logger.js'; // Adjust the import path as necessary

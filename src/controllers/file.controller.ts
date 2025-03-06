@@ -1,5 +1,5 @@
 import { config } from 'dotenv';
-import {getFile1,getFileInfo,deleteFile, insertFileInfo, createDirectory, getFilePaths, deleteMultipleDirectories, uploadFilesToGoogleDrive, getGoogleDriveDetailsDb, getFileStreamFromGoogleDrive, getGoogleDriveFilesFromFolder, deleteAllFilesFromGoogleDriveAndDB, getFilesInfo, uploadFilesToCloudinary, getCloudinaryFilesFromFolder, getFileStreamFromCloudinary, uploadFilesToGoogleCloudinary } from '../services/fileService.js';
+import {getFile1,getFileInfo,deleteFile, insertFileInfo, createDirectory, getFilePaths, deleteMultipleDirectories, uploadFilesToGoogleDrive, getGoogleDriveDetailsDb, getFileStreamFromGoogleDrive, getGoogleDriveFilesFromFolder, deleteAllFilesFromGoogleDriveAndDB, getFilesInfo, uploadFilesToCloudinary, getCloudinaryFilesFromFolder, getFileStreamFromCloudinary, uploadFilesToGoogleCloudinary } from '../services/file.service.js';
 import path from 'path';
 import configs from '../config/index.js';
 

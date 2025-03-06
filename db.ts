@@ -1,7 +1,7 @@
 
 import mongoose from 'mongoose';
-import Grid from 'gridfs-stream';
-import { configs } from './src/config/config.js';
+// import Grid from 'gridfs-stream';
+import { configs } from './src/config/config';
 
 const connectWithRetry = (retries = 5, delay = 5000) => {
   mongoose.connect(configs.dbconfig.url)
@@ -24,11 +24,11 @@ connectWithRetry();
 
 
 const db = mongoose.connection;
-let gfs;
-db.once('open', () => {
-  gfs = Grid(db.db, mongoose.mongo);
-  gfs.collection('file-uploads');
-});
+// let gfs;
+// db.once('open', () => {
+//   gfs = Grid(db.db, mongoose.mongo);
+//   gfs.collection('file-uploads');
+// });
 
 db.on('error', console.error.bind(console, 'connection error:'));
 
@@ -36,4 +36,4 @@ db.on('data', () => console.log('Data received from Database'));
 
 db.on('disconnected', () => console.log('Disconnected from Database'));
 
-export {db,gfs};
+export {db};

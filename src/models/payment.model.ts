@@ -29,7 +29,7 @@ const PurchaseSchema = new Schema(
       required: [true, 'Amount is required'],
       min: [0, 'Amount must be a positive number'],
       validate: {
-        validator: (v) => v > 0,
+        validator: (v:number) => v > 0,
         message: 'Amount must be greater than zero'
       }
     },
@@ -107,7 +107,7 @@ const PurchaseSchema = new Schema(
       type: String,
       required: [true, 'Contact number is required'],
       validate: {
-        validator: (v) => /^(\+?\d{1,4}[\s-]?)?(\(?\d{1,3}\)?[\s-]?)?[\d\s-]{7,15}$/.test(v),
+        validator: (v:string) => /^(\+?\d{1,4}[\s-]?)?(\(?\d{1,3}\)?[\s-]?)?[\d\s-]{7,15}$/.test(v),
         message: 'Please enter a valid contact number'
       },
     },
@@ -183,7 +183,7 @@ PurchaseSchema.index({ createdAt: -1 });
 
 
 PurchaseSchema.pre('save', function (next) {
-  this.updated_at = Date.now();
+  this.updated_at = new Date(Date.now());
   next();
 });
 

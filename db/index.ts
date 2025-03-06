@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const connectDB = (dbUrl, retries = 5, delay = 5000) => {
+const connectDB = (dbUrl:string, retries = 5, delay = 5000) => {
     mongoose.connect(dbUrl)
         .then(() => {
             console.log('Database connection successful');
@@ -18,4 +18,4 @@ const connectDB = (dbUrl, retries = 5, delay = 5000) => {
 };
 
 
-export { connectDB };
+export default connectDB ;

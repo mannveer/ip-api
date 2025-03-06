@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { promises as fs1 } from 'fs';
 import path from 'path';
-import File from '../models/fileModel.js';
+import File from '../models/file.model.js';
 import AppError from '../utils/errorHandler.js';
 import { cloudinaryServiceInstance } from '../utils/cloudinary.js';
 import logger from '../utils/logger.js';
@@ -391,7 +391,8 @@ export const uploadFilesToGoogleCloudinary = async (files) => {
 export const getCloudinaryFilesFromFolder = async (folder) => {
 
   try {
-    const files = await cloudinaryServiceInstance.getFileFromFolder(folder);
+    console.log(folder)
+    const files = await cloudinaryServiceInstance.getFileFromFolder("drivefiles/SampleFiles/t1.jpg-1739876325489-1094769");
     logger.info(`Fetched ${files.length} files from Cloudinary folder: ${folder}`);
     return files;
   } catch (error) {

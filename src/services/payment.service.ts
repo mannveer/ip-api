@@ -1,9 +1,9 @@
-import User from "../models/userModel.js";
+import User from "../models/user.model.js";
 import Razorpay from 'razorpay';
 import AppError from '../utils/errorHandler.js';
 import configs from '../config/index.js'
 import logger from '../utils/logger.js';
-import Purchase from "../models/paymentModel.js";
+import Purchase from "../models/payment.model.js";
 
 const razorpay = new Razorpay({
   key_id: configs.razorpay.key_id,
