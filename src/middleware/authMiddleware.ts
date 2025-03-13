@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/user.model.js';
-import AppError from '../utils/errorHandler.js';
+import {AppError} from '../utils/AppError.js';
 import { promisify } from 'util';
 import configs from '../config/index.js';
 

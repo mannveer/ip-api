@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
-// import { type } from 'os';
-import configs from '../config/index.js';
+import configs from '../config/index';
+import { FileInfo, StorageType } from '../interfaces/file.interface';
 
 const gdriveSchema = new mongoose.Schema({
   fileId: { type: String, required: true, unique: true, sparse: true },
@@ -14,55 +14,69 @@ const cloudinarySchema = new mongoose.Schema({
   sampleFolderPath: { type: String, required: true },
 });
 
+const s3Schema = new mongoose.Schema({
+  fileId: { type: String, required: true, unique: true, sparse: true },
+  bucket: { type: String, required: true },
+  key: { type: String, required: true },
+  samplePrefix: { type: String, required: true },
+  previewPrefix: { type: String, required: true },
+});
+
+const localSchema = new mongoose.Schema({
+  dirpath: { type: String, required: true },
+  sampleDirpath: { type: String, required: true },
+  previewDirpath: { type: String, required: true },
+});
+
 const fileSchema = new mongoose.Schema({
-  originalfilename: { type: String, required: true },
+  originalFilename: { type: String, required: true },
   filename: { type: String, required: true },
-  dirpath: {
-    type: String,
-    default: 'NA',
-    validate: {
-      validator: function (value) {
-        return configs.multer.storage !== 'local' || value !== 'NA';
-      },
-      message: 'dirpath is required for local configuration.',
-    },
-  },
-  googleDrive: {
-    type: gdriveSchema,
-    validate: {
-      validator: function (value) {
-        return configs.multer.storage !== 'drive' || !!value;
-      },
-      message: 'Google Drive details are required for drive configuration.',
-    },
-  },
   size: { type: String, required: true },
   mimetype: { type: String, required: true },
   price: { type: Number, required: true, min: 0 },
   description: { type: String, default: '' },
+  previewUrl: { type: String, default: '' },
   isDeleted: { type: Boolean, required: true, default: false },
+  createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
+  
+  // Storage-specific fields
+  googleDrive: {
+    type: gdriveSchema,
+    required: function() {
+      return configs.storage.type === StorageType.GOOGLE_DRIVE;
+    }
+  },
   cloudinary: {
     type: cloudinarySchema,
-    validate: {
-      validator: function (value) {
-        return configs.multer.storage !== 'cloudinary' || !!value;
-      },
-      message: 'Cloudinary details are required for cloudinary configuration.',
-    },
+    required: function() {
+      return configs.storage.type === StorageType.CLOUDINARY;
+    }
   },
+  s3: {
+    type: s3Schema,
+    required: function() {
+      return configs.storage.type === StorageType.S3;
+    }
+  },
+  local: {
+    type: localSchema,
+    required: function() {
+      return configs.storage.type === StorageType.LOCAL;
+    }
+  }
 });
 
-// fileSchema.pre('save', function (next) {
-//   if (configs.multer.storage === 'drive' && !this.googleDrive?.fileId) {
-//     return next(new AppError('googleDrive.fileId is required when storage is set to drive.'));
-//   }
-//   else if (configs.multer.storage === 'cloudinary' && !this.cloudinary?.fileId) {
-//     return next(new AppError('cloudinary.fileId is required when storage is set to cloudinary.'));
-//   }
-//   next();
-// });
+fileSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
 
-const File = mongoose.model('File', fileSchema);
+fileSchema.pre('findOneAndUpdate', function(next) {
+  this.set({ updatedAt: new Date() });
+  next();
+});
+
+const File = mongoose.model<FileInfo & mongoose.Document>('File', fileSchema);
 
 export default File;

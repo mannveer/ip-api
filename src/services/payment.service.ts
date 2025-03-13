@@ -1,6 +1,6 @@
 import User from "../models/user.model.js";
 import Razorpay from 'razorpay';
-import AppError from '../utils/errorHandler.js';
+import { AppError } from '../utils/AppError.js';
 import configs from '../config/index.js'
 import logger from '../utils/logger.js';
 import Purchase from "../models/payment.model.js";

@@ -1,6 +1,6 @@
 import logger from '../../utils/logger';
-import EmailService from './emailService';
-import { IEmailQueueJob } from '../../interfaces/email.interface';
+import EmailService from './email.service';
+import { IEmailQueueJob }
 import configs from '../../config/index';
 import Bull from 'bull';
 

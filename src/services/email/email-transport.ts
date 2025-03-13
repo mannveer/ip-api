@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 import configs from '../../config/index';
 import logger from '../../utils/logger';
-import { IEmailTransport } from '../../interfaces/email.interface';
+import { IEmailTransport } from '../../interfaces/email.interface.';
 
 // Cached transport for reuse
 let cachedTransport: any = null;

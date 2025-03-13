@@ -1,5 +1,5 @@
-import createTransport from './emailTransport';
-import emailTemplates from './emailTemplates';
+import createTransport from './email-transport';
+import emailTemplates from './mail-template-handler';
 import logger from '../../utils/logger';
 import configs from '../../config/index';
 import { IEmailOptions } from '../../interfaces/email.interface';

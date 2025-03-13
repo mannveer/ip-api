@@ -1,5 +1,5 @@
 import Project from '../models/project.model.js';
-import AppError from '../utils/errorHandler.js';
+import { AppError } from '../utils/AppError.js';
 
 class ProjectService {
   // Fetch all projects

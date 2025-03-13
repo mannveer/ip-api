@@ -1,473 +1,392 @@
-import fs from 'fs';
-import { promises as fs1 } from 'fs';
+// src/services/file.service.ts
+
+import {
+  FileDocument,
+  FileStreamResponse,
+  FileUploadResponse,
+  IFileService,
+  StorageType
+} from '../interfaces/file.interface';
+import File from '../models/file.model';
+import StorageFactory from './storage/storage-factory';
+import { AppError } from '../utils/AppError';
+import logger from '../utils/logger';
+import configs from '../config';
+import { RequestHandler } from 'express';
+import { workerData, Worker } from 'worker_threads';
+import os from 'os';
 import path from 'path';
-import File from '../models/file.model.js';
-import AppError from '../utils/errorHandler.js';
-import { cloudinaryServiceInstance } from '../utils/cloudinary.js';
-import logger from '../utils/logger.js';
-import { driveServiceInstance } from "../utils/gDrive.js";
-import configs from '../config/index.js';
-import { file } from 'googleapis/build/src/apis/file/index.js';
 
+export default class FileService implements IFileService {
+  private storageFactory: StorageFactory;
+  private maxConcurrency: number;
 
-export const createDirectory = async (dirPaths) => {
-  try {
-    for (const dirPath of dirPaths) {
-      await fs.promises.mkdir(dirPath, { recursive: true });
-      logger.info(`Directory created at ${dirPath}`);
-    }
-  } catch (error) {
-    logger.error(`Failed to create directory: ${error.message}`);
-    throw new AppError('Failed to create directory', 500);
-  }
-};
-
-export const deleteMultipleDirectories = async (dirPaths) => {
-  try {
-    for (const dirPath of dirPaths) {
-      await fs.promises.rmdir(dirPath, { recursive: true });
-      logger.info(`Directory deleted: ${dirPath}`);
-    }
-  }
-  catch (error) {
-    logger.error(`Error deleting directories: ${error.message}`);
-    throw new AppError('Error deleting directories', 500);
-  }
-};
-
-export const insertFileInfo = async (fileInfo) => {
-  try {
-    const file = new File(fileInfo);
-    await file.save();
-    logger.info(`File info saved to database for file: ${fileInfo.filename}`);
-    return file;
-  } catch (error) {
-    logger.error(`Error saving file info to database: ${error.message}`);
-    throw new AppError('Error saving file info to database', 500);
-  }
-};
-
-
-export const getFilesInfo = async (dirPath = null) => {
-  if (!dirPath && configs.multer.storage === 'local') {
-    throw new AppError('Directory path is required', 400);
-  }
-  try {
-    const query = configs.multer.storage === 'local' ? { dirpath: dirPath, isDeleted: false } : { dirpath: 'NA', isDeleted: false };
-    let filesInfo = await File.find(query).select('-dirpath -googleDrive -cloudinary -isDeleted');
-    if(filesInfo.length === 0){
-      return [];
-    }
-
-    if(configs.multer.storage === 'cloudinary'){
-      filesInfo = await getAllCloudinaryFilesUrl(configs.cloudindarydrive.previewFolderName, filesInfo);
-    }
-
-    logger.info('Successfully retrieved files info', filesInfo);
-    return filesInfo;
-  } catch (error) {
-    logger.error(`Error retrieving files info: ${error.message}`);
-    return [];
-  }
-};
-
-
-export const getFileInfo = async (fileId) => {
-  if (!fileId) {
-    throw new AppError('File ID is required', 400);
-  }
-  try {
-    const fileInfo = await File.findOne({ _id: fileId, isDeleted: false }).select('-dirpath -googleDrive -isDeleted -cloudinary');
-    if (!fileInfo) {
-      throw new AppError('No file found', 404);
-    }
-    logger.info(`File retrieved: ${fileId}`);
-    console.log(fileInfo)
-    return fileInfo;
-  } catch (error) {
-    logger.error(`Error retrieving file info for ID ${fileId}: ${error.message}`);
-    throw error;
-  }
-};
-
-export const getFileInfo1 = async (fileId) => {
-  if (!fileId) {
-    throw new AppError('File ID is required', 400);
-  }
-  try {
-    const fileInfo = await File.findOne({ _id: fileId, isDeleted: false });
-    if (!fileInfo) {
-      throw new AppError('No file found', 404);
-    }
-    logger.info(`File retrieved: ${fileId}`);
-    return fileInfo;
-  } catch (error) {
-    logger.error(`Error retrieving file info for ID ${fileId}: ${error.message}`);
-    throw error;
-  }
-};
-
-
-export const updateDeleteFileInfo = async (fileId) => {
-  if (!fileId) {
-    throw new AppError('File ID is required', 400);
-  }
-  try {
-    const fileInfo = await File.findByIdAndUpdate(fileId, { isDeleted: true });
-    if (!fileInfo) {
-      throw new AppError('No file found to delete', 404);
-    }
-    logger.info(`File marked as deleted in database: ${fileId}`);
-  } catch (error) {
-    logger.error(`Error marking file as deleted: ${error.message}`);
-    throw new AppError('Error deleting file', 500);
-  }
-};
-
-
-
-export const getFile1 = async (dirPath, filename, res) => {
-  if (!dirPath || !filename) {
-    throw new AppError('Directory path and filename are required', 400);
+  constructor() {
+    this.storageFactory = StorageFactory.getInstance();
+    // Set concurrency based on available CPU cores, but not to exceed 4
+    this.maxConcurrency = Math.min(os.cpus().length - 1, 4);
+    if (this.maxConcurrency < 1) this.maxConcurrency = 1;
   }
 
-  const filePath = path.join(dirPath, filename);
-  try {
-    await fs.promises.access(filePath, fs.constants.F_OK);
-    logger.info(`File exists: ${filePath}`);
-
-    // Stream file for immediate response
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    const readStream = fs.createReadStream(filePath);
-    readStream.pipe(res);
-    readStream.on('error', (err) => {
-      logger.error(`Error streaming file: ${err.message}`);
-      res.status(500).json({ message: 'Error downloading file' });
-    });
-  } catch (error) {
-    logger.error(`File does not exist or cannot be accessed: ${error.message}`);
-    throw new AppError('File not found', 404);
-  }
-};
-
-
-
-export const deleteFile = async (filepath) => {
-  if (!filepath) {
-    throw new AppError('File path is required', 400);
-  }
-
-  try {
-    await fs.promises.unlink(filePath);
-  } catch (error) {
-    logger.error(`Error deleting file from ${filePath}: ${error.message}`);
-    throw new AppError('Error deleting file', 500);
-  }
-};
-
-export const deleteFileInfo = async (fileId) => {
-  if (!fileId) {
-    throw new AppError('File ID is required', 400);
-  }
-  try {
-    const fileInfo = await File.findByIdAndDelete(fileId);
-    if (!fileInfo) {
-      throw new AppError('No file found to delete', 404);
-    }
-    logger.info(`File deleted from database: ${fileId}`);
-    return fileInfo;
-  } catch (error) {
-    logger.error(`Error deleting file: ${error.message}`);
-    throw new AppError('Error deleting file', 500);
-  }
-};
-
-
-export const getAbsolutePath = (dir, file) => {
-  return path.join(dir, file);
-}
-
-
-export const getFilePaths = async (filesDirectory) => {
-  try {
-    const files = await fs.promises.readdir(filesDirectory);
-    if (files.length === 0) {
-      logger.warn('No files found in directory');
-      return [];
-    }
-    const filePaths = files.map(file => path.join(filesDirectory, file));
-    logger.info(`Fetched ${filePaths.length} file paths`);
-    return filePaths;
-  } catch (error) {
-    logger.error(`Error fetching file paths: ${error.message}`);
-    throw new AppError('Error fetching file paths', 500);
-  }
-};
-
-export const uploadFilesToGoogleDrive = async (files) => {
-  const uploadedFiles = await Promise.all(files.map(async (file) => {
+  async uploadFile(file: Express.Multer.File): Promise<FileUploadResponse> {
     try {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const newfilename = file.originalname + '-' + uniqueSuffix;
-      const fileId = await driveServiceInstance.uploadFile(file.buffer, newfilename, configs.googleDrive.filesFolderId, file.mimetype);
-      return { newfilename, fileId };
-    } catch (error) {
-      logger.error(`Error uploading file to Google Drive: ${error.message}`);
-      return null;
-    }
-  }));
-
-  for (const [index, file] of uploadedFiles.entries()) {
-    if (file) {
-      try {
-        const sampleFolderId = await driveServiceInstance.createFolder(file.newfilename, configs.googleDrive.sampleFolderId);
-        const previewFolderId = await driveServiceInstance.createFolder(file.newfilename, configs.googleDrive.previewFolderId);
-        const fileModel = {
-          originalfilename: files[index].originalname,
-          filename: file.newfilename,
-          size: `${(files[index].size / (1024 * 1024)).toFixed(2)} MB`,
-          mimetype: files[index].mimetype,
-          description: files[index].description ?? 'temp1',
-          price: files[index].price ?? 0,
-          googleDrive: { fileId: file.fileId, sampleFolderId, previewFolderId }
-        };
-        await insertFileInfo(fileModel);
-      } catch (error) {
-        logger.error(`Error processing file ${files[index]}: ${error.message}`);
-        throw new AppError('Error processing file', 500);
-      }
-    }
-  }
-};
-
-
-export const getFileStreamFromGoogleDrive = async (fileId) => {
-  try {
-    // const file = await driveServiceInstance.downloadFile(fileId);
-    const file = await driveServiceInstance.getFileStream(fileId);
-    logger.info(`File fetched from Google Drive with ID: ${fileId}`);
-    return file;
-  } catch (error) {
-    logger.error(`Error fetching file from Google Drive: ${error.message}`);
-    throw new AppError('Error fetching file from Google Drive', 500);
-  }
-}
-
-
-export const getGoogleDriveFilesFromFolder = async (folderId) => {
-  try {
-    const files = await driveServiceInstance.listFiles(folderId);
-    console.log("folderId - ", folderId);
-    logger.info(`Fetched ${files.length} files from Google Drive folder: ${folderId}`);
-    return files;
-  } catch (error) {
-    logger.error(`Error fetching files from Google Drive folder: ${error.message}`);
-    throw new AppError('Error fetching files from Google Drive folder', 500);
-  }
-}
-
-export const getGoogleDriveDetailsDb = async (filename) => {
-  try {
-    const file = await File.findOne({ filename: filename });
-    if (!file) {
-      throw new AppError('No file found with Google Drive ID', 404);
-    }
-    return file.googleDrive;
-  } catch (error) {
-    logger.error(`Error fetching file from database: ${error.message}`);
-    throw new AppError('Error fetching file from database', 500);
-  }
-}
-
-export const deleteAllFilesFromGoogleDriveAndDB = async () => {
-  try {
-    const filesdetails = await getFilesInfo();
-    await Promise.all(filesdetails.map(async (file) => {
-      await driveServiceInstance.deleteFile(file.googleDrive.fileId);
-      await driveServiceInstance.deleteFile(file.googleDrive.sampleFolderId);
-      await driveServiceInstance.deleteFile(file.googleDrive.previewFolderId);
-    }));
-    await File.deleteMany({ dirpath: 'NA' });
-
-    logger.info('All files deleted from Google Drive');
-  } catch (error) {
-    logger.error(`Error deleting files from Google Drive: ${error.message}`);
-    throw new AppError('Error deleting files from Google Drive', 500);
-  }
-}
-
-export const shareFileOnGoogleDrive = async (fileId, email, role = 'reader') => {
-  try {
-    await driveServiceInstance.shareFile(fileId, email, role);
-  } catch (error) {
-    logger.error(`Error sharing file on Google Drive: ${error.message}`);
-    throw new AppError('Error sharing file on Google Drive', 500);
-  }
-};
-
-export const uploadFilesToCloudinary = async (files) => {
-  const uploadedFiles = await Promise.all(files.map(async (file) => {
-    try {
-      // const response = await cloudinaryServiceInstance.upload(file.buffer, configs.cloudindarydrive.filesFolderName);
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const newfilename = file.originalname + '-' + uniqueSuffix;
-      const response = await cloudinaryServiceInstance.uploadFileBuffer(file.buffer, configs.cloudindarydrive.filesFolderName,file.originalname);
-      return { asset_id: response.asset_id, secure_url: response.secure_url, newfilename };
-    } catch (error) {
-      logger.error(`Error uploading file to Cloudinary: ${error.message}`);
-      return null;
-    }
-  }));
-
-  for (const [index, file] of uploadedFiles.entries()) {
-    if (file) {
-      const sampleFolderRes = await cloudinaryServiceInstance.createSubFolder(configs.cloudindarydrive.sampleFolderName, file.newfilename);
-      const previewFolderRes = await cloudinaryServiceInstance.createSubFolder(configs.cloudindarydrive.previewFolderName, file.newfilename);
-      const fileModel = {
-        originalfilename: files[index].originalname,  
-        filename: file.newfilename,
-        size: `${(files[index].size / (1024 * 1024)).toFixed(2)} MB`,
-        mimetype: files[index].mimetype,
-        description: files[index].description ?? "",
-        price: files[index].price ?? 0,
-        cloudinary: {
-          fileId: file.asset_id,
-          sampleFolderPath: sampleFolderRes.path,
-          previewFolderPath: previewFolderRes.path,
-        },
-      };
-
-      await insertFileInfo(fileModel);
-    }
-  }
-
-}
-
-export const uploadFilesToGoogleCloudinary = async (files) => {
-  const uploadedFiles = await Promise.all(files.map(async (file) => {
-    try {
-      // const response = await cloudinaryServiceInstance.upload(file.buffer, configs.cloudindarydrive.filesFolderName);
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const newfilename = file.originalname + '-' + uniqueSuffix;
-      const gfileId = await driveServiceInstance.uploadFile(file.buffer, newfilename, configs.googleDrive.filesFolderId, file.mimetype);
-      // const response = await cloudinaryServiceInstance.uploadFileBuffer(file.buffer, configs.cloudindarydrive.filesFolderName,file.originalname);
-      return { gfileId, newfilename, uniqueSuffix };
-    } catch (error) {
-      logger.error(`Error uploading file to Cloudinary: ${error.message}`);
-      return null;
-    }
-  }));
-
-  for (const [index, file] of uploadedFiles.entries()) {
-    if (file) {
-      const sampleFolderRes = await cloudinaryServiceInstance.createSubFolder(configs.cloudindarydrive.sampleFolderName, file.newfilename);
-      const previewFolderRes = await cloudinaryServiceInstance.createSubFolder(configs.cloudindarydrive.previewFolderName, file.newfilename);
-      const fileModel = {
-        originalfilename: files[index].originalname,  
-        filename: file.newfilename,
-        size: `${(files[index].size / (1024 * 1024)).toFixed(2)} MB`,
-        mimetype: files[index].mimetype,
-        description: files[index].description ?? "",
-        price: files[index].price ?? 0,
-        cloudinary: {
-          fileId: "NA-"+file.uniqueSuffix,
-          sampleFolderPath: sampleFolderRes.path,
-          previewFolderPath: previewFolderRes.path,
-        },
-        googleDrive: { 
-          fileId: file.gfileId,
-          sampleFolderId: "NA",
-          previewFolderId: "NA"
+      const storageProvider = this.storageFactory.getProvider();
+      
+      // Generate a unique filename
+      const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}-${file.originalname}`;
+      
+      // Upload file to storage
+      const fileId = await storageProvider.uploadFile(file, uniqueName);
+      
+      // Create sample and preview folders
+      const sampleFolderId = await storageProvider.createSampleFolder(uniqueName);
+      const previewFolderId = await storageProvider.createPreviewFolder(uniqueName);
+      
+      // Prepare the file document for database
+      const fileModel = this.createFileDocument(
+        file, 
+        uniqueName, 
+        fileId, 
+        sampleFolderId, 
+        previewFolderId
+      );
+      
+      // Save file metadata to database
+      const savedFile = await this.insertFileInfo(fileModel);
+      
+      logger.info(`File uploaded successfully: ${uniqueName}`);
+      
+      return {
+        message: 'File uploaded successfully',
+        file: {
+          originalname: file.originalname,
+          filename: uniqueName,
+          size: file.size,
+          mimetype: file.mimetype
         }
       };
-
-      await insertFileInfo(fileModel);
+    } catch (error) {
+      logger.error(`Error uploading file: ${error.message}`);
+      throw new AppError('Failed to upload file', 500);
     }
   }
 
-}
+  async uploadFiles(files: Express.Multer.File[]): Promise<{ message: string, files: { filename: string }[] }> {
+    try {
+      if (!files || files.length === 0) {
+        throw new AppError('No files provided', 400);
+      }
 
-
-export const getCloudinaryFilesFromFolder = async (folder) => {
-
-  try {
-    console.log(folder)
-    const files = await cloudinaryServiceInstance.getFileFromFolder("drivefiles/SampleFiles/t1.jpg-1739876325489-1094769");
-    logger.info(`Fetched ${files.length} files from Cloudinary folder: ${folder}`);
-    return files;
-  } catch (error) {
-    logger.error(`Error fetching files from Cloudinary folder: ${error.message}`);
-    throw new AppError('Error fetching files from Cloudinary folder', 500);
-  }
-}
-
-export const getAllCloudinaryFilesUrl = async (dirPath, filesArr) => {
-  try {
-    const files = await cloudinaryServiceInstance.getAllFilesInFolder(dirPath);
-
-    if (files.length === 0) {
-      return filesArr;
+      const storageProvider = this.storageFactory.getProvider();
+      
+      // Use worker threads for parallel processing of large batches
+      if (files.length > 5) {
+        return this.parallelUploadFiles(files);
+      }
+      
+      // For smaller batches, process sequentially
+      const uploadedFiles = await storageProvider.uploadFiles(files);
+      
+      // Process each uploaded file
+      for (const [index, uploadedFile] of uploadedFiles.entries()) {
+        // Create sample and preview folders
+        const sampleFolderId = await storageProvider.createSampleFolder(uploadedFile.newfilename);
+        const previewFolderId = await storageProvider.createPreviewFolder(uploadedFile.newfilename);
+        
+        // Prepare and save file metadata
+        const fileModel = this.createFileDocument(
+          files[index],
+          uploadedFile.newfilename,
+          uploadedFile.fileId,
+          sampleFolderId,
+          previewFolderId
+        );
+        
+        await this.insertFileInfo(fileModel);
+      }
+      
+      logger.info(`${files.length} files uploaded successfully`);
+      
+      return {
+        message: 'Files uploaded successfully',
+        files: files.map(file => ({ filename: file.originalname }))
+      };
+    } catch (error) {
+      logger.error(`Error uploading files: ${error.message}`);
+      throw new AppError('Failed to upload files', 500);
     }
-    logger.info(`Fetched ${files.length} files from Cloudinary folder: ${dirPath}`);
+  }
 
-    const fileMap = new Map(files.map(file => [file.asset_folder.slice(configs.cloudindarydrive.previewFolderName.length + 1), file.secure_url]));
-
-    filesArr.forEach(file => {
-      file.previewUrl = fileMap.get(file.filename) || "";
+  private async parallelUploadFiles(files: Express.Multer.File[]): Promise<{ message: string, files: { filename: string }[] }> {
+    // Divide the files into batches based on the number of CPU cores
+    const batchSize = Math.ceil(files.length / this.maxConcurrency);
+    const batches = [];
+    
+    for (let i = 0; i < files.length; i += batchSize) {
+      batches.push(files.slice(i, i + batchSize));
+    }
+    
+    // Create a worker for each batch
+    const workerPromises = batches.map(async (batch, index) => {
+      return new Promise((resolve, reject) => {
+        const worker = new Worker(
+          path.join(__dirname, 'workers', 'file-upload.worker.js'),
+          {
+            workerData: {
+              batch,
+              storageType: configs.multer.storage
+            }
+          }
+        );
+        
+        worker.on('message', resolve);
+        worker.on('error', reject);
+        worker.on('exit', (code) => {
+          if (code !== 0) {
+            reject(new Error(`Worker stopped with exit code ${code}`));
+          }
+        });
+      });
     });
-    return filesArr;
-  } catch (error) {
-    logger.error(`Error fetching files from Cloudinary folder: ${error.message}`);
-    return filesArr;
+    
+    // Wait for all workers to complete
+    const results = await Promise.all(workerPromises);
+    
+    // Flatten the results
+    const uploadedFiles = results.flat();
+    
+    // Save file metadata to database
+    for (const file of uploadedFiles) {
+      await this.insertFileInfo(file.fileModel);
+    }
+    
+    return {
+      message: 'Files uploaded successfully',
+      files: files.map(file => ({ filename: file.originalname }))
+    };
   }
-}
 
-
-
-export const getFileStreamFromCloudinary = async (publicId) => {
-  try {
-    const file = await cloudinaryServiceInstance.fetchFileStream(publicId);
-    logger.info(`File fetched from Cloudinary with public ID: ${publicId}`);
-    return file;
-  } catch (error) {
-    logger.error(`Error fetching file from Cloudinary: ${error.message}`);
-    throw new AppError('Error fetching file from Cloudinary', 500);
+  private createFileDocument(
+    file: Express.Multer.File,
+    filename: string,
+    fileId: string,
+    sampleFolderId: string,
+    previewFolderId: string
+  ): any {
+    const baseDoc = {
+      originalfilename: file.originalname,
+      filename: filename,
+      size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+      mimetype: file.mimetype,
+      description: file.description || '',
+      price: file.price || 0,
+      isDeleted: false
+    };
+    
+    // Add storage-specific metadata
+    switch (configs.multer.storage) {
+      case StorageType.LOCAL:
+        return {
+          ...baseDoc,
+          dirpath: configs.filePaths.files
+        };
+      case StorageType.CLOUDINARY:
+        return {
+          ...baseDoc,
+          dirpath: 'NA',
+          cloudinary: {
+            fileId: fileId,
+            sampleFolderPath: sampleFolderId,
+            previewFolderPath: previewFolderId
+          }
+        };
+      case StorageType.GOOGLE_DRIVE:
+        return {
+          ...baseDoc,
+          dirpath: 'NA',
+          googleDrive: {
+            fileId: fileId,
+            sampleFolderId: sampleFolderId,
+            previewFolderId: previewFolderId
+          }
+        };
+      default:
+        return baseDoc;
+    }
   }
-}
 
-export const getCloudinaryFiles = async () => {
-  try {
-    const files = await cloudinaryServiceInstance.getAllFiles();
-    logger.info(`Fetched ${files.length} files from Cloudinary`);
-    return files;
-  } catch (error) {
-    logger.error(`Error fetching files from Cloudinary: ${error.message}`);
-    throw new AppError('Error fetching files from Cloudinary', 500);
+  private async insertFileInfo(fileInfo: any): Promise<FileDocument> {
+    try {
+      const file = new File(fileInfo);
+      await file.save();
+      logger.info(`File info saved to database for file: ${fileInfo.filename}`);
+      return file;
+    } catch (error) {
+      logger.error(`Error saving file info to database: ${error.message}`);
+      throw new AppError('Error saving file info to database', 500);
+    }
   }
-}
 
-export const deleteFileFromCloudinary = async (publicId) => {
-  try {
-    await cloudinaryServiceInstance.deleteFile(publicId);
-    logger.info(`File deleted from Cloudinary with public ID: ${publicId}`);
-  } catch (error) {
-    logger.error(`Error deleting file from Cloudinary: ${error.message}`);
-    throw new AppError('Error deleting file from Cloudinary', 500);
+  async getFileMetadata(fileId: string): Promise<FileDocument> {
+    if (!fileId) {
+      throw new AppError('File ID is required', 400);
+    }
+    
+    try {
+      const fileInfo = await File.findOne({ _id: fileId, isDeleted: false })
+        .select('-isDeleted');
+      
+      if (!fileInfo) {
+        throw new AppError('No file found', 404);
+      }
+      
+      logger.info(`File metadata retrieved: ${fileId}`);
+      return fileInfo;
+    } catch (error) {
+      logger.error(`Error retrieving file metadata: ${error.message}`);
+      throw error instanceof AppError ? error : new AppError('Failed to retrieve file metadata', 500);
+    }
   }
-}
 
-export const deleteAllFilesFromCloudinaryAndDB = async () => {
-  try {
-    const files = await getCloudinaryFiles();
-    await Promise.all(files.map(async (file) => {
-      await cloudinaryServiceInstance.deleteFile(file.publicId);
-    }));
-    await File.deleteMany({ dirpath: 'NA' });
-
-    logger.info('All files deleted from Cloudinary');
-  } catch (error) {
-    logger.error(`Error deleting files from Cloudinary: ${error.message}`);
-    throw new AppError('Error deleting files from Cloudinary', 500);
+  async getAllFilesMetadata(): Promise<FileDocument[]> {
+    try {
+      const query = configs.multer.storage === StorageType.LOCAL 
+        ? { dirpath: configs.filePaths.files, isDeleted: false } 
+        : { dirpath: 'NA', isDeleted: false };
+      
+      let filesInfo = await File.find(query)
+        .select('-isDeleted')
+        .lean();
+      
+      if (filesInfo.length === 0) {
+        return [];
+      }
+      
+      // If using Cloudinary, get preview URLs
+      if (configs.multer.storage === StorageType.CLOUDINARY) {
+        filesInfo = await this.enrichWithCloudinaryPreviewUrls(filesInfo);
+      }
+      
+      logger.info(`Retrieved ${filesInfo.length} file metadata records`);
+      return filesInfo;
+    } catch (error) {
+      logger.error(`Error retrieving file metadata: ${error.message}`);
+      throw new AppError('Failed to retrieve file metadata', 500);
+    }
   }
-}
 
+  private async enrichWithCloudinaryPreviewUrls(filesInfo: FileDocument[]): Promise<FileDocument[]> {
+    try {
+      const storageProvider = this.storageFactory.getProvider();
+      const files = await this.cloudinaryHelper.getAllFilesInFolder(
+        configs.cloudindarydrive.previewFolderName
+      );
+      
+      if (files.length === 0) {
+        return filesInfo;
+      }
+      
+      const fileMap = new Map(
+        files.map(file => [
+          file.asset_folder.slice(configs.cloudindarydrive.previewFolderName.length + 1),
+          file.secure_url
+        ])
+      );
+      
+      return filesInfo.map(file => ({
+        ...file,
+        previewUrl: fileMap.get(file.filename) || ""
+      }));
+    } catch (error) {
+      logger.error(`Error enriching files with Cloudinary URLs: ${error.message}`);
+      return filesInfo;
+    }
+  }
+
+  async getFileStream(fileId: string): Promise<FileStreamResponse> {
+    try {
+      // First, get file metadata from database
+      const fileInfo = await this.getFileMetadata(fileId);
+      
+      // Get the appropriate storage provider
+      const storageProvider = this.storageFactory.getProvider();
+      
+      // Determine the actual file ID to request based on storage type
+      let actualFileId: string;
+      
+      if (configs.multer.storage === StorageType.LOCAL) {
+        actualFileId = fileInfo.filename;
+      } else if (configs.multer.storage === StorageType.CLOUDINARY && fileInfo.cloudinary) {
+        actualFileId = fileInfo.cloudinary.fileId;
+      } else if (configs.multer.storage === StorageType.GOOGLE_DRIVE && fileInfo.googleDrive) {
+        actualFileId = fileInfo.googleDrive.fileId;
+      } else {
+        throw new AppError('Invalid file storage configuration', 500);
+      }
+      
+      // Get the file stream from the storage provider
+      const fileStream = await storageProvider.getFileStream(actualFileId);
+      
+      logger.info(`File stream retrieved for file: ${fileId}`);
+      return fileStream;
+    } catch (error) {
+      logger.error(`Error getting file stream: ${error.message}`);
+      throw error instanceof AppError ? error : new AppError('Failed to get file stream', 500);
+    }
+  }
+
+  async deleteFile(fileId: string): Promise<void> {
+    try {
+      // Get file metadata
+      const fileInfo = await this.getFileMetadata(fileId);
+      
+      // Get the storage provider
+      const storageProvider = this.storageFactory.getProvider();
+      
+      // Determine the actual file ID to delete
+      let actualFileId: string;
+      
+      if (configs.multer.storage === StorageType.LOCAL) {
+        actualFileId = fileInfo.filename;
+      } else if (configs.multer.storage === StorageType.CLOUDINARY && fileInfo.cloudinary) {
+        actualFileId = fileInfo.cloudinary.fileId;
+      } else if (configs.multer.storage === StorageType.GOOGLE_DRIVE && fileInfo.googleDrive) {
+        actualFileId = fileInfo.googleDrive.fileId;
+      } else {
+        throw new AppError('Invalid file storage configuration', 500);
+      }
+      
+      // Delete the file from storage
+      await storageProvider.deleteFile(actualFileId);
+      
+      // Mark the file as deleted in the database
+      await File.findByIdAndUpdate(fileId, { isDeleted: true });
+      
+      logger.info(`File deleted: ${fileId}`);
+    } catch (error) {
+      logger.error(`Error deleting file: ${error.message}`);
+      throw error instanceof AppError ? error : new AppError('Failed to delete file', 500);
+    }
+  }
+
+  async getSampleFiles(fileName: string): Promise<string[]> {
+    try {
+      if (!fileName) {
+        throw new AppError('File name is required', 400);
+      }
+      
+      // Get the file metadata
+      const fileInfo = await File.findOne({ filename: fileName, isDeleted: false });
+      
+      if (!fileInfo) {
+        throw new AppError('File not found', 404);
+      }
+      
+      // Get the storage provider
+      const storageProvider = this.storageFactory.getProvider();
+      
+      // Get the sample folder ID based on storage type
+      let sampleFolderId: string;
+      
+      if (configs.multer.storage === StorageType.LOCAL) {
+        sampleFolderId = path.join(configs.filePaths.sampleFiles, fileName);

@@ -26,9 +26,9 @@ const configs = {
     },
     cloudindarydrive:{
         projectFolderName : process.env.CLOUDINDARY_DRIVE_PROJECT_FOLDER_NAME,
-        filesFolderName : process.env.CLOUDINDARY_DRIVE_FILES_FOLDER_NAME,
-        sampleFolderName : process.env.CLOUDINDARY_DRIVE_SAMPLE_FOLDER_NAME,
-        previewFolderName : process.env.CLOUDINDARY_DRIVE_PREVIEW_FOLDER_NAME,
+        filesFolderName : process.env.CLOUDINDARY_DRIVE_FILES_FOLDER_NAME || 'errorfiles',
+        sampleFolderName : process.env.CLOUDINDARY_DRIVE_SAMPLE_FOLDER_NAME || 'errorsamplefiles',
+        previewFolderName : process.env.CLOUDINDARY_DRIVE_PREVIEW_FOLDER_NAME || 'errorpreviewfiles',
     },
     jwt: {
         jwtSecret : process.env.JWT_SECRET || 'your_jwt_secret',
@@ -81,7 +81,7 @@ const configs = {
         bucketName : process.env.AWS_BUCKET_NAME
     },
     google:{
-        drive:process.env.GOOGLE_DRIVE_SERVICE,
+        drive:process.env.GOOGLE_DRIVE_SERVICE || 'na',
         clientId : process.env.GOOGLE_CLIENT_ID,
         clientSecret : process.env.GOOGLE_CLIENT_SECRET,
         redirectUri : process.env.GOOGLE_REDIRECT_URI
@@ -99,6 +99,9 @@ const configs = {
             fileSize : process.env.MULTER_FILE_SIZE || 1024 * 1024 * 5
         }
     },
+    storage:{
+        type: process.env.STORAGE_TYPE || 'local'
+    }
 };
 
 export default configs;

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { constants } from "../utils/constant";
-import emailqueueService from '../services/email/emailqueue.service';
+import emailqueueService from '../services/email/email-queue.service';
 import UserService from '../services/user.service';
 import { driveServiceInstance } from "../utils/gDrive";
 import FileService from "../services/file.service";

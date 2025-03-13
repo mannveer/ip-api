@@ -1,7 +1,7 @@
 import Otp from '../models/otp.model.js';
 import configs from '../config/index.js';
 import { hashOtp } from '../utils/crypto.js';
-import AppError from '../utils/errorHandler.js';
+import { AppError } from '../utils/AppError.js';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
 import { constants } from '../utils/constant.js';
 import User from '../models/user.model.js';
