@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { IUser } from '../interfaces/user.interface';
 const { Schema } = mongoose;
 
 const UserSchema = new Schema(
@@ -62,6 +63,6 @@ UserSchema.virtual('purchases', {
 
 UserSchema.index({ 'purchases.paymentid': 1 });
 
-const User = mongoose.model('User', UserSchema);
+const User = mongoose.model<IUser>('User', UserSchema);
 
 export default User;
