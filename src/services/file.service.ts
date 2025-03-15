@@ -1,5 +1,3 @@
-// src/services/file.service.ts
-
 import {
   FileDocument,
   FileStreamResponse,
@@ -8,7 +6,7 @@ import {
   StorageType
 } from '../interfaces/file.interface';
 import File from '../models/file.model';
-import StorageFactory from './storage/storage-factory';
+import {StorageFactory} from './storage/storage-factory';
 import { AppError } from '../utils/AppError';
 import logger from '../utils/logger';
 import configs from '../config';
@@ -18,11 +16,9 @@ import os from 'os';
 import path from 'path';
 
 export default class FileService implements IFileService {
-  private storageFactory: StorageFactory;
   private maxConcurrency: number;
 
   constructor() {
-    this.storageFactory = StorageFactory.getInstance();
     // Set concurrency based on available CPU cores, but not to exceed 4
     this.maxConcurrency = Math.min(os.cpus().length - 1, 4);
     if (this.maxConcurrency < 1) this.maxConcurrency = 1;
@@ -30,7 +26,7 @@ export default class FileService implements IFileService {
 
   async uploadFile(file: Express.Multer.File): Promise<FileUploadResponse> {
     try {
-      const storageProvider = this.storageFactory.getProvider();
+      const storageProvider = StorageFactory.getStorageProvider();
       
       // Generate a unique filename
       const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}-${file.originalname}`;
@@ -77,7 +73,7 @@ export default class FileService implements IFileService {
         throw new AppError('No files provided', 400);
       }
 
-      const storageProvider = this.storageFactory.getProvider();
+      const storageProvider = StorageFactory.getStorageProvider();
       
       // Use worker threads for parallel processing of large batches
       if (files.length > 5) {
@@ -277,7 +273,7 @@ export default class FileService implements IFileService {
 
   private async enrichWithCloudinaryPreviewUrls(filesInfo: FileDocument[]): Promise<FileDocument[]> {
     try {
-      const storageProvider = this.storageFactory.getProvider();
+      const storageProvider = StorageFactory.getStorageProvider();
       const files = await this.cloudinaryHelper.getAllFilesInFolder(
         configs.cloudindarydrive.previewFolderName
       );
@@ -309,7 +305,7 @@ export default class FileService implements IFileService {
       const fileInfo = await this.getFileMetadata(fileId);
       
       // Get the appropriate storage provider
-      const storageProvider = this.storageFactory.getProvider();
+      const storageProvider = StorageFactory.getStorageProvider();
       
       // Determine the actual file ID to request based on storage type
       let actualFileId: string;
@@ -341,7 +337,7 @@ export default class FileService implements IFileService {
       const fileInfo = await this.getFileMetadata(fileId);
       
       // Get the storage provider
-      const storageProvider = this.storageFactory.getProvider();
+      const storageProvider = StorageFactory.getStorageProvider();
       
       // Determine the actual file ID to delete
       let actualFileId: string;
@@ -383,10 +379,11 @@ export default class FileService implements IFileService {
       }
       
       // Get the storage provider
-      const storageProvider = this.storageFactory.getProvider();
+      const storageProvider = StorageFactory.getStorageProvider();
       
       // Get the sample folder ID based on storage type
       let sampleFolderId: string;
       
       if (configs.multer.storage === StorageType.LOCAL) {
         sampleFolderId = path.join(configs.filePaths.sampleFiles, fileName);
+        

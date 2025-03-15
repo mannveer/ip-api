@@ -1,4 +1,4 @@
-import { StorageProviderInterface, StorageType } from '../../interfaces/file.interface';
+import { StorageType } from '../../interfaces/file.interface';
 import { LocalStorageProvider } from '../storage/local-storage.service';
 import { S3StorageProvider } from '../storage/s3-storage.service';
 import { CloudinaryStorageProvider } from '../storage/cloudinary-storage.service';
@@ -7,7 +7,8 @@ import configs from '../../config/index';
 import logger from '../../utils/logger';
 
 export class StorageFactory {
-  static getStorageProvider(): StorageProviderInterface {
+
+  static getStorageProvider() {
     logger.info(`Creating storage provider for type: ${configs.storage.type}`);
     
     switch (configs.storage.type) {
@@ -25,3 +26,4 @@ export class StorageFactory {
     }
   }
 }
+

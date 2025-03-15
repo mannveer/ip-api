@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { constants } from "../utils/constant";
 import emailqueueService from '../services/email/email-queue.service';
 import UserService from '../services/user.service';
-import { driveServiceInstance } from "../utils/gDrive";
+import { getDriveService } from "../services/storage/google-drive-storage.service";
 import FileService from "../services/file.service";
 import PaymentService from "../services/payment.service";
 
@@ -27,7 +27,8 @@ class UserController {
       await PaymentService.insertPayment(req.user._id, payment);
       
       const fileinfo = await FileService.getFileInfo(purchase.fileid);
-      await driveServiceInstance.shareFile(fileinfo.googleDrive.fileId, email);
+      const driveService = await getDriveService();
+      await driveService.shareFile(fileinfo.googleDrive.fileId, email);
       
       // Queue welcome email instead of sending directly
       emailqueueService.add('welcome', {
@@ -90,7 +91,8 @@ class UserController {
       }
 
       const fileinfo = await FileService.getFileInfo(fileid);
-      await driveServiceInstance.shareFile(fileinfo.googleDrive.fileId, email);
+      const driveService = await getDriveService();
+      await driveService.shareFile(fileinfo.googleDrive.fileId, email);
 
       // Queue welcome email instead of sending directly
       emailqueueService.add('welcome', {

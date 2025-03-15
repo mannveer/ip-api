@@ -213,7 +213,7 @@ export const getCloudinaryService = (): CloudinaryService => {
 };
 
 // Storage Provider implementation
-export default class CloudinaryStorageProvider implements IStorageProvider {
+export class CloudinaryStorageProvider implements IStorageProvider {
   private service: CloudinaryService;
   
   constructor() {

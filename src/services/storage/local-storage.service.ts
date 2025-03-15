@@ -1,4 +1,3 @@
-import { StorageProviderInterface } from '../../interfaces/file.interface';
 import fs from 'fs/promises';
 import path from 'path';
 import { createReadStream } from 'fs';
@@ -10,7 +9,7 @@ import { AppError } from '../../utils/AppError';
 
 const pipelineAsync = promisify(pipeline);
 
-export class LocalStorageProvider implements StorageProviderInterface {
+export class LocalStorageProvider {
   private baseDir: string;
   private filesDir: string;
   private sampleDir: string;

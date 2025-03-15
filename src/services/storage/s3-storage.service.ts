@@ -1,4 +1,3 @@
-import { StorageProviderInterface } from '../../interfaces/file.interface';
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -8,7 +7,7 @@ import logger from '../../utils/logger';
 import { AppError } from '../../utils/AppError'
 import { v4 as uuidv4 } from 'uuid';
 
-export class S3StorageProvider implements StorageProviderInterface {
+export class S3StorageProvider {
   private s3Client: S3Client;
   private bucket: string;
   private filePrefix: string;

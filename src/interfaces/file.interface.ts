@@ -111,8 +111,8 @@ export interface FileMetadata {
     getAllFilesMetadata(): Promise<FileDocument[]>;
     getFileStream(fileId: string): Promise<FileStreamResponse>;
     deleteFile(fileId: string): Promise<void>;
-    getSampleFiles(fileName: string): Promise<string[]>;
-    getPreviewFile(fileName: string): Promise<FileStreamResponse>;
+    getSampleFiles(fileId: string): Promise<string[]>;
+    getPreviewFile(fileId: string): Promise<FileStreamResponse>;
     deleteAllFiles(): Promise<void>;
   }
 
@@ -162,5 +162,6 @@ export interface GoogleDriveStorageProviderInterface {
   }[]>;
   listFiles(directoryPath: string): Promise<any[]>;
 }
+
 
   

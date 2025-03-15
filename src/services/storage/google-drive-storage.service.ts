@@ -453,9 +453,32 @@ export class GoogleDriveStorageProvider implements GoogleDriveStorageProviderInt
       
       return mimeType;
     }
+
+    async shareFile(fileId: string, email: string, role: string = 'reader'): Promise<void> {
+      try {
+        if (!this.drive) {
+          throw new AppError('Google Drive service not initialized', 500);
+        }
+        
+        await this.drive.permissions.create({
+          fileId,
+          requestBody: {
+            role,
+            type: 'user',
+            emailAddress: email,
+          },
+          fields: 'id',
+          sendNotificationEmail: true,
+          // supportsAllDrives: false,
+        });
+        console.log(`File shared with ${email} as ${role}.`);
+      } catch (error: any) {
+        logger.error(`Failed to share file: ${error.message}`);
+        throw new AppError('Failed to share file', 500);
+      }
+    }
   }
   
-  // Create a singleton instance with lazy initialization
   let driveServiceInstance: GoogleDriveStorageProvider | null = null;
   let initPromise: Promise<GoogleDriveStorageProvider> | null = null;
   
