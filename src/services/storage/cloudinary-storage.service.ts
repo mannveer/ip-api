@@ -1,35 +1,226 @@
-import { FileStreamResponse, IStorageProvider } from '../../interfaces/file.interface';
+// services/storage/cloudinary-storage.service.ts
+import { v2 as cloudinary } from 'cloudinary';
+import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
+import { Readable } from 'stream';
 import configs from '../../config';
 import logger from '../../utils/logger';
 import { AppError } from '../../utils/AppError';
-import { v2 as cloudinary } from 'cloudinary';
-import fs from 'fs/promises';
-import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
+import { FileMetadata, FileStreamResponse, IFileStorageProvider } from '../../interfaces/file.interface';
 
-// Singleton CloudinaryService with optimized implementation
-export class CloudinaryService {
-  private static instance: CloudinaryService | null = null;
+export class CloudinaryStorageProvider implements IFileStorageProvider {
+  private static instance: CloudinaryStorageProvider | null = null;
   private folderCache: Map<string, { path: string, timestamp: number }> = new Map();
   private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
   
   private constructor() {
     cloudinary.config({
-      cloud_name: configs.cloudindary.cloud_name,
-      api_key: configs.cloudindary.api_key,
-      api_secret: configs.cloudindary.api_secret,
+      cloud_name: configs.cloudinary.cloud_name,
+      api_key: configs.cloudinary.api_key,
+      api_secret: configs.cloudinary.api_secret,
     });
     logger.info('Cloudinary service initialized successfully');
   }
 
-  public static getInstance(): CloudinaryService {
-    if (!CloudinaryService.instance) {
-      CloudinaryService.instance = new CloudinaryService();
+  public static getInstance(): CloudinaryStorageProvider {
+    if (!CloudinaryStorageProvider.instance) {
+      CloudinaryStorageProvider.instance = new CloudinaryStorageProvider();
     }
-    return CloudinaryService.instance;
+    return CloudinaryStorageProvider.instance;
   }
 
-  async uploadFileBuffer(fileBuffer: Buffer, folder: string, fileName: string): Promise<any> {
+  // Core file operations
+  async getFile(fileId: string): Promise<FileMetadata> {
+    try {
+      const result = await cloudinary.api.resource(fileId);
+      return this.mapToFileMetadata(result);
+    } catch (error: any) {
+      logger.error(`Error fetching file from Cloudinary: ${error.message}`);
+      throw new AppError('Failed to get file from Cloudinary', error.http_code || 500);
+    }
+  }
+
+  async getFiles(fileIds: string[]): Promise<FileMetadata[]> {
+    try {
+      // Use Promise.all for concurrent requests
+      const metadataPromises = fileIds.map(id => this.getFile(id).catch(err => {
+        logger.warn(`Error fetching file ${id}: ${err.message}`);
+        return null;
+      }));
+      
+      const results = await Promise.all(metadataPromises);
+      return results.filter((metadata): metadata is FileMetadata => metadata !== null);
+    } catch (error: any) {
+      logger.error(`Error fetching multiple files: ${error.message}`);
+      throw new AppError('Failed to get files from Cloudinary', 500);
+    }
+  }
+
+  async uploadFile(file: Express.Multer.File, fileName?: string): Promise<string> {
+    try {
+      const uniqueName = fileName || `${Date.now()}-${Math.round(Math.random() * 1E9)}-${file.originalname}`;
+      
+      const response = await this.uploadFileBuffer(
+        file.buffer,
+        configs.cloudinary.filesFolderName,
+        uniqueName
+      );
+      
+      logger.info(`File uploaded to Cloudinary: ${response.public_id}`);
+      return response.public_id;
+    } catch (error: any) {
+      logger.error(`Error uploading file to Cloudinary: ${error.message}`);
+      throw new AppError('Failed to upload file to Cloudinary', 500);
+    }
+  }
+
+  async uploadFiles(files: Express.Multer.File[]): Promise<string[]> {
+    try {
+      // Use Promise.all for concurrent uploads
+      const uploadPromises = files.map(file => this.uploadFile(file));
+      return await Promise.all(uploadPromises);
+    } catch (error: any) {
+      logger.error(`Error uploading multiple files: ${error.message}`);
+      throw new AppError('Failed to upload files to Cloudinary', 500);
+    }
+  }
+
+  async deleteFile(fileId: string): Promise<boolean> {
+    try {
+      const result = await cloudinary.uploader.destroy(fileId);
+      const success = result.result === 'ok';
+      if (success) {
+        logger.info(`File deleted from Cloudinary: ${fileId}`);
+      } else {
+        logger.warn(`Failed to delete file from Cloudinary: ${fileId}`);
+      }
+      return success;
+    } catch (error: any) {
+      logger.error(`Error deleting file from Cloudinary: ${error.message}`);
+      return false;
+    }
+  }
+
+  async deleteFiles(fileIds: string[]): Promise<boolean[]> {
+    // Use Promise.all for concurrent deletions
+    const deletePromises = fileIds.map(id => this.deleteFile(id));
+    return await Promise.all(deletePromises);
+  }
+
+  // Folder operations
+  async createFolder(folderName: string, parentFolderId?: string): Promise<string> {
+    // Check cache first
+    const folderPath = parentFolderId ? `${parentFolderId}/${folderName}` : folderName;
+    const cachedFolder = this.folderCache.get(folderPath);
+    
+    if (cachedFolder && (Date.now() - cachedFolder.timestamp) < CloudinaryStorageProvider.CACHE_TTL) {
+      logger.debug(`Using cached folder: ${folderPath}`);
+      return cachedFolder.path;
+    }
+    
+    try {
+      logger.info(`Creating folder: ${folderPath}`);
+      const response = await cloudinary.api.create_folder(folderPath);
+      
+      // Update cache
+      this.folderCache.set(folderPath, { 
+        path: response.path, 
+        timestamp: Date.now() 
+      });
+      
+      logger.info(`Folder created successfully: ${response.path}`);
+      return response.path;
+    } catch (error: any) {
+      // Handle case where folder might already exist
+      if (error.error && error.error.message && error.error.message.includes('already exists')) {
+        logger.info(`Folder already exists: ${folderPath}`);
+        
+        // Update cache
+        this.folderCache.set(folderPath, { 
+          path: folderPath, 
+          timestamp: Date.now() 
+        });
+        
+        return folderPath;
+      }
+      
+      logger.error(`Error creating folder: ${error.message}`);
+      throw new AppError('Failed to create folder in Cloudinary', 500);
+    }
+  }
+
+  async getFilesFromFolder(folderId: string): Promise<FileMetadata[]> {
+    try {
+      const resources = await cloudinary.api.resources({
+        type: 'upload',
+        prefix: folderId,
+        max_results: 500
+      });
+      
+      return resources.resources.map(resource => this.mapToFileMetadata(resource));
+    } catch (error: any) {
+      logger.error(`Error fetching files from folder ${folderId}: ${error.message}`);
+      throw new AppError('Failed to get files from folder', 500);
+    }
+  }
+
+  async getAllFilesMetadataFromFolder(folderId: string): Promise<FileMetadata[]> {
+    try {
+      let resources: any[] = [];
+      let nextCursor: string | null = null;
+  
+      // Use do-while to process pagination
+      do {
+        const response = await cloudinary.api.resources({
+          type: 'upload',
+          prefix: folderId,
+          max_results: 500,
+          next_cursor: nextCursor,
+        });
+  
+        resources = resources.concat(response.resources);
+        nextCursor = response.next_cursor;
+      } while (nextCursor);
+  
+      return resources.map(resource => this.mapToFileMetadata(resource));
+    } catch (error: any) {
+      logger.error(`Error fetching all files from folder ${folderId}: ${error.message}`);
+      throw new AppError('Failed to get all files from folder', 500);
+    }
+  }
+
+  // Metadata and streaming
+  async getFileMetadata(fileId: string): Promise<FileMetadata> {
+    return this.getFile(fileId);
+  }
+
+  async getFileStream(fileId: string): Promise<FileStreamResponse> {
+    try {
+      const metadata = await this.getFile(fileId);
+      
+      if (!metadata.url) {
+        throw new AppError('File URL not available', 404);
+      }
+      
+      const response = await axios({
+        url: metadata.url,
+        method: 'GET',
+        responseType: 'stream', 
+      });
+  
+      return {
+        stream: response.data,
+        mimeType: metadata.mimeType,
+        name: metadata.name
+      };
+    } catch (error: any) {
+      logger.error(`Error fetching file stream from Cloudinary: ${error.message}`);
+      throw new AppError('Failed to get file stream', 500);
+    }
+  }
+
+  // Helper methods
+  private async uploadFileBuffer(fileBuffer: Buffer, folder: string, fileName: string): Promise<any> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
@@ -42,302 +233,29 @@ export class CloudinaryService {
             logger.error(`Error uploading file buffer to Cloudinary: ${error.message}`);
             return reject(error);
           }
-          logger.info(`File buffer uploaded to Cloudinary: ${result?.public_id || 'unknown'}`);
           resolve(result);
         }
       );
   
-      // Write the file buffer to the upload stream
       uploadStream.end(fileBuffer);
     });
   }
-  
-  async createSubFolder(parentFolder: string, subFolder: string): Promise<any> {
-    // Check cache first
-    const cacheKey = `${parentFolder}/${subFolder}`;
-    const cachedFolder = this.folderCache.get(cacheKey);
-    
-    if (cachedFolder && (Date.now() - cachedFolder.timestamp) < CloudinaryService.CACHE_TTL) {
-      logger.debug(`Using cached folder: ${cacheKey}`);
-      return { path: cachedFolder.path };
-    }
-    
-    try {
-      logger.info(`Creating subfolder: ${cacheKey}`);
-      const folderPath = `${parentFolder}/${subFolder}`;
-      const response = await cloudinary.api.create_folder(folderPath);
-      
-      // Update cache
-      this.folderCache.set(cacheKey, { 
-        path: response.path, 
-        timestamp: Date.now() 
-      });
-      
-      logger.info(`Subfolder created successfully: ${response.path}`);
-      return response;
-    } catch (error: any) {
-      // Handle case where folder might already exist
-      if (error.error && error.error.message && error.error.message.includes('already exists')) {
-        logger.info(`Folder already exists: ${cacheKey}`);
-        const folderPath = `${parentFolder}/${subFolder}`;
-        
-        // Update cache
-        this.folderCache.set(cacheKey, { 
-          path: folderPath, 
-          timestamp: Date.now() 
-        });
-        
-        return { path: folderPath };
-      }
-      
-      logger.error(`Error creating subfolder: ${error.message}`);
-      throw error;
-    }
-  }
 
-  async upload(localFilePath: string, uploadToFolder: string): Promise<any> {
-    if (!localFilePath) throw new Error('Please provide a valid file path');
-    if (!uploadToFolder) throw new Error('Please provide a valid folder name');
-  
-    try {
-      logger.info(`Uploading file to Cloudinary: ${localFilePath}`);
-  
-      const response = await cloudinary.uploader.upload(localFilePath, {
-        resource_type: 'auto',
-        folder: uploadToFolder,
-      });
-  
-      logger.info(`File uploaded successfully: ${response.public_id}`);
-      return response;
-    } catch (error: any) {
-      logger.error(`Error during upload: ${error.message}`);
-      // Clean up local file if an error occurs
-      await fs.unlink(localFilePath).catch((err) =>
-        logger.error(`Error deleting file: ${err.message}`)
-      );
-      throw error;
-    }
-  }
-
-  async getFile(publicId: string): Promise<any> {
-    try {
-      const result = await cloudinary.api.resource(publicId);
-      return result;
-    } catch (error: any) {
-      logger.error(`Error fetching file from Cloudinary: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async fetchFileStream(fileUrl: string): Promise<any> {
-    try {
-      const response = await axios({
-        url: fileUrl,
-        method: 'GET',
-        responseType: 'stream', 
-      });
-  
-      return response.data;
-    } catch (error: any) {
-      logger.error(`Error fetching file stream from Cloudinary: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async getAllFiles(): Promise<any[]> {
-    try {
-      const result = await cloudinary.api.resources({
-        max_results: 500 // Increase to reduce number of API calls
-      });
-      return result.resources;
-    } catch (error: any) {
-      logger.error(`Error fetching all files from Cloudinary: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async deleteFile(publicId: string): Promise<any> {
-    try {
-      const result = await cloudinary.uploader.destroy(publicId);
-      logger.info(`File deleted from Cloudinary: ${publicId}`);
-      return result;
-    } catch (error: any) {
-      logger.error(`Error deleting file from Cloudinary: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async getAllFilesInFolder(folderPath: string): Promise<any[]> {
-    try {
-      let resources: any[] = [];
-      let nextCursor: string | null = null;
-  
-      // Use do-while to process pagination
-      do {
-        const response = await cloudinary.api.resources({
-          type: 'upload',
-          prefix: folderPath,
-          max_results: 500, // Maximize results per request
-          next_cursor: nextCursor,
-        });
-  
-        resources = resources.concat(response.resources);
-        nextCursor = response.next_cursor;
-      } while (nextCursor);
-  
-      return resources;
-    } catch (error: any) {
-      logger.error(`Error fetching files from folder ${folderPath}: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async getFileFromFolder(folder: string): Promise<any[]> {
-    try {
-      const result = await cloudinary.api.resources({
-        type: 'upload',
-        prefix: folder,
-        max_results: 500 // Increase to reduce number of API calls
-      });
-      return result.resources;
-    } catch (error: any) {
-      logger.error(`Error fetching files from folder ${folder}: ${error.message}`);
-      throw error;
-    }
+  private mapToFileMetadata(resource: any): FileMetadata {
+    return {
+      id: resource.public_id,
+      name: resource.public_id.split('/').pop(),
+      path: resource.public_id,
+      size: resource.bytes,
+      mimeType: resource.resource_type + '/' + resource.format,
+      url: resource.secure_url,
+      createdAt: new Date(resource.created_at),
+      modifiedAt: new Date(resource.last_updated)
+    };
   }
 }
 
-// Use a function to get the singleton instance
-export const getCloudinaryService = (): CloudinaryService => {
-  return CloudinaryService.getInstance();
+// Singleton accessor
+export const getCloudinaryService = (): CloudinaryStorageProvider => {
+  return CloudinaryStorageProvider.getInstance();
 };
-
-// Storage Provider implementation
-export class CloudinaryStorageProvider implements IStorageProvider {
-  private service: CloudinaryService;
-  
-  constructor() {
-    this.service = getCloudinaryService();
-  }
-
-  async uploadFile(file: Express.Multer.File, fileName?: string): Promise<string> {
-    try {
-      const uniqueName = fileName || `${Date.now()}-${Math.round(Math.random() * 1E9)}-${file.originalname}`;
-      const fileId = uuidv4(); // Generate unique ID
-      
-      const response = await this.service.uploadFileBuffer(
-        file.buffer,
-        configs.cloudindarydrive.filesFolderName,
-        uniqueName
-      );
-      
-      logger.info(`File uploaded to Cloudinary: ${response.public_id} (${fileId})`);
-      
-      // Store fileId as a property if needed for future retrieval
-      return response.asset_id;
-    } catch (error: any) {
-      logger.error(`Error uploading file to Cloudinary: ${error.message}`);
-      throw new AppError('Failed to upload file to Cloudinary', 500);
-    }
-  }
-
-  async uploadFiles(files: Express.Multer.File[]): Promise<{ newfilename: string, fileId: string }[]> {
-    // Use Promise.all for concurrent uploads
-    const uploadPromises = files.map(async (file) => {
-      const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}-${file.originalname}`;
-      
-      const response = await this.service.uploadFileBuffer(
-        file.buffer,
-        configs.cloudindarydrive.filesFolderName,
-        uniqueName
-      );
-      
-      return {
-        newfilename: uniqueName,
-        fileId: response.asset_id
-      };
-    });
-
-    try {
-      return await Promise.all(uploadPromises);
-    } catch (error: any) {
-      logger.error(`Error uploading multiple files: ${error.message}`);
-      throw new AppError('Failed to upload files to Cloudinary', 500);
-    }
-  }
-
-  async getFileStream(fileId: string): Promise<FileStreamResponse> {
-    try {
-      const file = await this.service.fetchFileStream(fileId);
-      return {
-        data: file,
-        name: fileId
-      };
-    } catch (error: any) {
-      logger.error(`Error getting file stream from Cloudinary: ${error.message}`);
-      throw new AppError('Failed to get file from Cloudinary', 500);
-    }
-  }
-
-  async deleteFile(fileId: string): Promise<void> {
-    try {
-      await this.service.deleteFile(fileId);
-      logger.info(`File deleted from Cloudinary: ${fileId}`);
-    } catch (error: any) {
-      logger.error(`Error deleting file from Cloudinary: ${error.message}`);
-      throw new AppError('Failed to delete file from Cloudinary', 500);
-    }
-  }
-
-  async createSampleFolder(fileName: string): Promise<string> {
-    try {
-      const folderRes = await this.service.createSubFolder(
-        configs.cloudindarydrive.sampleFolderName,
-        fileName
-      );
-      return folderRes.path;
-    } catch (error: any) {
-      logger.error(`Error creating sample folder: ${error.message}`);
-      throw new AppError('Failed to create sample folder', 500);
-    }
-  }
-
-  async createPreviewFolder(fileName: string): Promise<string> {
-    try {
-      const folderRes = await this.service.createSubFolder(
-        configs.cloudindarydrive.previewFolderName,
-        fileName
-      );
-      return folderRes.path;
-    } catch (error: any) {
-      logger.error(`Error creating preview folder: ${error.message}`);
-      throw new AppError('Failed to create preview folder', 500);
-    }
-  }
-
-  async getFilesFromFolder(folderPath: string): Promise<any[]> {
-    try {
-      const files = await this.service.getFileFromFolder(folderPath);
-      return files.map(file => ({
-        id: file.asset_id,
-        name: file.public_id,
-        secure_url: file.secure_url
-      }));
-    } catch (error: any) {
-      logger.error(`Error getting files from Cloudinary folder: ${error.message}`);
-      return [];
-    }
-  }
-
-  async deleteAllFiles(fileIds: string[]): Promise<void> {
-    try {
-      // Use Promise.all for concurrent deletions
-      const deletePromises = fileIds.map(fileId => this.deleteFile(fileId));
-      await Promise.all(deletePromises);
-      logger.info(`Batch deleted ${fileIds.length} files from Cloudinary`);
-    } catch (error: any) {
-      logger.error(`Error during batch file deletion: ${error.message}`);
-      throw new AppError('Failed to delete files from Cloudinary', 500);
-    }
-  }
-}

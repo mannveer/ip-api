@@ -1,13 +1,41 @@
+// interfaces/file-storage.interface.ts
 import { Readable } from 'stream';
+
 export interface FileMetadata {
-    originalfilename: string;
-    filename: string;
-    size: string;
-    mimetype: string;
-    description?: string;
-    price: number;
-    previewUrl?: string;
-  }
+  id: string;
+  name: string;
+  path?: string;
+  size: number;
+  mimeType: string;
+  url?: string;
+  createdAt?: Date;
+  modifiedAt?: Date;
+}
+
+export interface FileStreamResponse {
+  stream: Readable;
+  mimeType: string;
+  name: string;
+}
+
+export interface IFileStorageProvider {
+  // Single file operations
+  getFile(fileId: string): Promise<FileMetadata>;
+  getFiles(fileIds: string[]): Promise<FileMetadata[]>;
+  uploadFile(file: Express.Multer.File, fileName?: string): Promise<string>;
+  uploadFiles(files: Express.Multer.File[]): Promise<string[]>;
+  deleteFile(fileId: string): Promise<boolean>;
+  deleteFiles(fileIds: string[]): Promise<boolean[]>;
+  
+  // Folder operations
+  createFolder(folderName: string, parentFolderId?: string): Promise<string>;
+  getFilesFromFolder(folderId: string): Promise<FileMetadata[]>;
+  getAllFilesMetadataFromFolder(folderId: string): Promise<FileMetadata[]>;
+  
+  // Metadata and streaming
+  getFileMetadata(fileId: string): Promise<FileMetadata>;
+  getFileStream(fileId: string): Promise<FileStreamResponse>;
+}
   
   export interface FileInfo {
     originalFilename: string;
@@ -71,11 +99,11 @@ export interface FileMetadata {
   }
 
   
-  export interface FileStreamResponse {
-    data: NodeJS.ReadableStream;
-    name?: string;
-    mimeType?: string;
-  }
+  // export interface FileStreamResponse {
+  //   data: NodeJS.ReadableStream;
+  //   name?: string;
+  //   mimeType?: string;
+  // }
 
   
   // Interface for file storage providers
@@ -115,7 +143,6 @@ export interface FileMetadata {
     getPreviewFile(fileId: string): Promise<FileStreamResponse>;
     deleteAllFiles(): Promise<void>;
   }
-
 
 
   // google-drive-storage.interface.ts

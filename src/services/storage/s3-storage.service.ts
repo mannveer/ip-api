@@ -1,39 +1,79 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
 import configs from '../../config';
 import logger from '../../utils/logger';
-import { AppError } from '../../utils/AppError'
+import { AppError } from '../../utils/AppError';
 import { v4 as uuidv4 } from 'uuid';
+import { FileMetadata, FileStreamResponse, IFileStorageProvider } from '../../interfaces/file.interface';
 
-export class S3StorageProvider {
+export class S3StorageProvider implements IFileStorageProvider {
   private s3Client: S3Client;
   private bucket: string;
   private filePrefix: string;
-  private samplePrefix: string;
-  private previewPrefix: string;
+  private folderPrefix: string;
+  private urlExpirationSeconds: number;
 
   constructor() {
     this.s3Client = new S3Client({
       region: configs.aws.region,
       credentials: {
-        accessKeyId: configs.aws.accessKeyId,
-        secretAccessKey: configs.aws.secretAccessKey
+        accessKeyId: configs.aws.accessKeyId || '',
+        secretAccessKey: configs.aws.secretAccessKey || ''
       }
     });
     this.bucket = configs.aws.bucket;
     this.filePrefix = 'files/';
-    this.samplePrefix = 'sample-files/';
-    this.previewPrefix = 'preview-files/';
+    this.folderPrefix = 'folders/';
+    this.urlExpirationSeconds = 3600; // 1 hour
   }
 
-  async uploadFile(file: Express.Multer.File, filename: string): Promise<{fileId: string, metadata: any}> {
+  async getFile(fileId: string): Promise<FileMetadata> {
     try {
-      const key = `${this.filePrefix}${filename}`;
-      const fileId = uuidv4();
+      const key = this.getFileKey(fileId);
+      const command = new HeadObjectCommand({
+        Bucket: this.bucket,
+        Key: key
+      });
       
-      // Use multipart upload for large files to improve performance
+      const response = await this.s3Client.send(command);
+      const fileName = decodeURIComponent(response.Metadata?.['original-name'] || key.split('/').pop());
+      
+      const presignedUrl = await this.generatePresignedUrl(key);
+      
+      return {
+        id: fileId,
+        name: fileName,
+        path: key,
+        size: response.ContentLength || 0,
+        mimeType: response.ContentType || 'application/octet-stream',
+        url: presignedUrl,
+        createdAt: response.LastModified,
+        modifiedAt: response.LastModified
+      };
+    } catch (error) {
+      logger.error(`Failed to get file from S3: ${error.message}`);
+      throw new AppError('File not found', 404);
+    }
+  }
+
+  async getFiles(fileIds: string[]): Promise<FileMetadata[]> {
+    try {
+      const filePromises = fileIds.map(fileId => this.getFile(fileId));
+      return await Promise.all(filePromises);
+    } catch (error) {
+      logger.error(`Failed to get multiple files from S3: ${error.message}`);
+      throw new AppError('Failed to get files', 500);
+    }
+  }
+
+  async uploadFile(file: Express.Multer.File, fileName?: string): Promise<string> {
+    try {
+      const fileId = uuidv4();
+      const finalFileName = fileName || `${fileId}-${file.originalname}`;
+      const key = `${this.filePrefix}${finalFileName}`;
+      
       const upload = new Upload({
         client: this.s3Client,
         params: {
@@ -46,39 +86,40 @@ export class S3StorageProvider {
             'file-id': fileId
           }
         },
-        queueSize: 4, // number of concurrent uploads
-        partSize: 5 * 1024 * 1024 // 5MB per part
+        queueSize: 4,
+        partSize: 5 * 1024 * 1024
       });
 
-      const result = await upload.done();
+      await upload.done();
       logger.info(`File uploaded to S3: ${key}`);
       
-      return {
-        fileId,
-        metadata: {
-          bucket: this.bucket,
-          key,
-          etag: result.ETag,
-          size: file.size,
-          mimetype: file.mimetype
-        }
-      };
+      return fileId;
     } catch (error) {
       logger.error(`Failed to upload file to S3: ${error.message}`);
-      throw new AppError('Failed to upload file to S3', 500);
+      throw new AppError('Failed to upload file', 500);
+    }
+  }
+
+  async uploadFiles(files: Express.Multer.File[]): Promise<string[]> {
+    try {
+      const uploadPromises = files.map(file => this.uploadFile(file));
+      return await Promise.all(uploadPromises);
+    } catch (error) {
+      logger.error(`Failed to upload multiple files to S3: ${error.message}`);
+      throw new AppError('Failed to upload files', 500);
     }
   }
 
   async deleteFile(fileId: string): Promise<boolean> {
     try {
-      // Assuming fileId is the S3 key or we have a way to map it
+      const key = this.getFileKey(fileId);
       const command = new DeleteObjectCommand({
         Bucket: this.bucket,
-        Key: fileId.startsWith(this.filePrefix) ? fileId : `${this.filePrefix}${fileId}`
+        Key: key
       });
       
       await this.s3Client.send(command);
-      logger.info(`File deleted from S3: ${fileId}`);
+      logger.info(`File deleted from S3: ${key}`);
       return true;
     } catch (error) {
       logger.error(`Failed to delete file from S3: ${error.message}`);
@@ -86,9 +127,156 @@ export class S3StorageProvider {
     }
   }
 
-  async getFileStream(fileId: string): Promise<any> {
+  async deleteFiles(fileIds: string[]): Promise<boolean[]> {
     try {
-      const key = fileId.startsWith(this.filePrefix) ? fileId : `${this.filePrefix}${fileId}`;
+      const deletePromises = fileIds.map(fileId => this.deleteFile(fileId));
+      return await Promise.all(deletePromises);
+    } catch (error) {
+      logger.error(`Failed to delete multiple files from S3: ${error.message}`);
+      throw new AppError('Failed to delete files', 500);
+    }
+  }
+
+  async createFolder(folderName: string, parentFolderId?: string): Promise<string> {
+    try {
+      const folderId = uuidv4();
+      let folderPath = `${this.folderPrefix}${folderId}/`;
+      
+      if (parentFolderId) {
+        // Get parent folder path first
+        const parentPath = await this.getFolderPath(parentFolderId);
+        folderPath = `${parentPath}${folderName}/`;
+      }
+      
+      // S3 doesn't need actual folder creation, but we'll create an empty marker object
+      const command = new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: folderPath,
+        Body: '',
+        ContentType: 'application/x-directory',
+        Metadata: {
+          'folder-id': folderId,
+          'folder-name': encodeURIComponent(folderName)
+        }
+      });
+      
+      await this.s3Client.send(command);
+      logger.info(`Folder created in S3: ${folderPath}`);
+      
+      return folderId;
+    } catch (error) {
+      logger.error(`Failed to create folder in S3: ${error.message}`);
+      throw new AppError('Failed to create folder', 500);
+    }
+  }
+
+  async getFilesFromFolder(folderId: string): Promise<FileMetadata[]> {
+    try {
+      const folderPath = await this.getFolderPath(folderId);
+      
+      const command = new ListObjectsV2Command({
+        Bucket: this.bucket,
+        Prefix: folderPath,
+        Delimiter: '/'
+      });
+      
+      const response = await this.s3Client.send(command);
+      
+      if (!response.Contents) {
+        return [];
+      }
+      
+      // Filter out the folder object itself and get metadata for all remaining objects
+      const files = response.Contents.filter(object => 
+        object.Key !== folderPath && !object.Key.endsWith('/')
+      );
+      
+      const fileMetadataPromises = files.map(async (file) => {
+        const headCommand = new HeadObjectCommand({
+          Bucket: this.bucket,
+          Key: file.Key
+        });
+        
+        const headResponse = await this.s3Client.send(headCommand);
+        const fileId = headResponse.Metadata?.['file-id'] || file.Key.split('/').pop();
+        const fileName = decodeURIComponent(headResponse.Metadata?.['original-name'] || file.Key.split('/').pop());
+        const presignedUrl = await this.generatePresignedUrl(file.Key);
+        
+        return {
+          id: fileId,
+          name: fileName,
+          path: file.Key,
+          size: file.Size || 0,
+          mimeType: headResponse.ContentType || 'application/octet-stream',
+          url: presignedUrl,
+          createdAt: file.LastModified,
+          modifiedAt: file.LastModified
+        };
+      });
+      
+      return await Promise.all(fileMetadataPromises);
+    } catch (error) {
+      logger.error(`Failed to get files from folder in S3: ${error.message}`);
+      throw new AppError('Failed to get files from folder', 500);
+    }
+  }
+
+  async getAllFilesMetadataFromFolder(folderId: string): Promise<FileMetadata[]> {
+    try {
+      const folderPath = await this.getFolderPath(folderId);
+      
+      const command = new ListObjectsV2Command({
+        Bucket: this.bucket,
+        Prefix: folderPath,
+        // No delimiter to get all objects recursively
+      });
+      
+      const response = await this.s3Client.send(command);
+      
+      if (!response.Contents) {
+        return [];
+      }
+      
+      // Filter out directory objects
+      const files = response.Contents.filter(object => !object.Key.endsWith('/'));
+      
+      const fileMetadataPromises = files.map(async (file) => {
+        const headCommand = new HeadObjectCommand({
+          Bucket: this.bucket,
+          Key: file.Key
+        });
+        
+        const headResponse = await this.s3Client.send(headCommand);
+        const fileId = headResponse.Metadata?.['file-id'] || file.Key.split('/').pop();
+        const fileName = decodeURIComponent(headResponse.Metadata?.['original-name'] || file.Key.split('/').pop());
+        const presignedUrl = await this.generatePresignedUrl(file.Key);
+        
+        return {
+          id: fileId,
+          name: fileName,
+          path: file.Key,
+          size: file.Size || 0,
+          mimeType: headResponse.ContentType || 'application/octet-stream',
+          url: presignedUrl,
+          createdAt: file.LastModified,
+          modifiedAt: file.LastModified
+        };
+      });
+      
+      return await Promise.all(fileMetadataPromises);
+    } catch (error) {
+      logger.error(`Failed to get all files metadata from folder in S3: ${error.message}`);
+      throw new AppError('Failed to get files metadata', 500);
+    }
+  }
+
+  async getFileMetadata(fileId: string): Promise<FileMetadata> {
+    return this.getFile(fileId);
+  }
+
+  async getFileStream(fileId: string): Promise<FileStreamResponse> {
+    try {
+      const key = this.getFileKey(fileId);
       
       const command = new GetObjectCommand({
         Bucket: this.bucket,
@@ -96,10 +284,12 @@ export class S3StorageProvider {
       });
       
       const response = await this.s3Client.send(command);
+      const fileName = decodeURIComponent(response.Metadata?.['original-name'] || key.split('/').pop());
       
       return {
         stream: response.Body as Readable,
-        mimetype: response.ContentType
+        mimeType: response.ContentType || 'application/octet-stream',
+        name: fileName
       };
     } catch (error) {
       logger.error(`Failed to get file stream from S3: ${error.message}`);
@@ -107,178 +297,46 @@ export class S3StorageProvider {
     }
   }
 
-  async createSampleDirectory(filename: string): Promise<string> {
-    // S3 doesn't need directory creation, just use prefix pattern
-    const samplePath = `${this.samplePrefix}${filename}/`;
-    logger.info(`S3 sample directory path: ${samplePath}`);
-    return samplePath;
-  }
-
-  async createPreviewDirectory(filename: string): Promise<string> {
-    // S3 doesn't need directory creation, just use prefix pattern
-    const previewPath = `${this.previewPrefix}${filename}/`;
-    logger.info(`S3 preview directory path: ${previewPath}`);
-    return previewPath;
-  }
-
-  async uploadSampleFile(file: Buffer, filename: string, parentPath: string): Promise<string> {
-    try {
-      const key = `${parentPath}${filename}`;
-      
-      const command = new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: file,
-        ContentType: this.getMimeType(filename)
-      });
-      
-      await this.s3Client.send(command);
-      logger.info(`Sample file uploaded to S3: ${key}`);
-      
-      return key;
-    } catch (error) {
-      logger.error(`Failed to upload sample file to S3: ${error.message}`);
-      throw new AppError('Failed to upload sample file to S3', 500);
-    }
-  }
-
-  async uploadPreviewFile(file: Buffer, filename: string, parentPath: string): Promise<string> {
-    try {
-      const key = `${parentPath}${filename}`;
-      
-      const command = new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: file,
-        ContentType: this.getMimeType(filename)
-      });
-      
-      await this.s3Client.send(command);
-      logger.info(`Preview file uploaded to S3: ${key}`);
-      
-      return key;
-    } catch (error) {
-      logger.error(`Failed to upload preview file to S3: ${error.message}`);
-      throw new AppError('Failed to upload preview file to S3', 500);
-    }
-  }
-
-  async getSampleFiles(parentPath: string): Promise<{url: string, name: string}[]> {
-    try {
-      const command = new ListObjectsV2Command({
-        Bucket: this.bucket,
-        Prefix: parentPath,
-        Delimiter: '/'
-      });
-      
-      const response = await this.s3Client.send(command);
-      
-      if (!response.Contents) {
-        return [];
-      }
-      
-      const getUrlPromises = response.Contents.map(async (object) => {
-        const getCommand = new GetObjectCommand({
-          Bucket: this.bucket,
-          Key: object.Key
-        });
-        
-        // Generate pre-signed URL that expires in 1 hour
-        const url = await getSignedUrl(this.s3Client, getCommand, { expiresIn: 3600 });
-        
-        return {
-          url,
-          name: object.Key.split('/').pop()
-        };
-      });
-      
-      return Promise.all(getUrlPromises);
-    } catch (error) {
-      logger.error(`Failed to get sample files from S3: ${error.message}`);
-      return [];
-    }
-  }
-
-  async getPreviewFiles(parentPath: string): Promise<{url: string, name: string}[]> {
-    try {
-      const command = new ListObjectsV2Command({
-        Bucket: this.bucket,
-        Prefix: parentPath,
-        Delimiter: '/'
-      });
-      
-      const response = await this.s3Client.send(command);
-      
-      if (!response.Contents) {
-        return [];
-      }
-      
-      const getUrlPromises = response.Contents.map(async (object) => {
-        const getCommand = new GetObjectCommand({
-          Bucket: this.bucket,
-          Key: object.Key
-        });
-        
-        // Generate pre-signed URL that expires in 1 hour
-        const url = await getSignedUrl(this.s3Client, getCommand, { expiresIn: 3600 });
-        
-        return {
-          url,
-          name: object.Key.split('/').pop()
-        };
-      });
-      
-      return Promise.all(getUrlPromises);
-    } catch (error) {
-      logger.error(`Failed to get preview files from S3: ${error.message}`);
-      return [];
-    }
-  }
-
-  private getMimeType(filename: string): string {
-    const ext = filename.split('.').pop().toLowerCase();
+  // Helper methods
+  private async generatePresignedUrl(key: string): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key
+    });
     
-    const mimeTypes = {
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'gif': 'image/gif',
-      'webp': 'image/webp',
-      'pdf': 'application/pdf',
-      'zip': 'application/zip',
-      'txt': 'text/plain',
-      'html': 'text/html',
-      'css': 'text/css',
-      'js': 'application/javascript',
-      'json': 'application/json'
-    };
-    
-    return mimeTypes[ext] || 'application/octet-stream';
+    return getSignedUrl(this.s3Client, command, { expiresIn: this.urlExpirationSeconds });
   }
 
-  async listFiles(directoryPath: string): Promise<any[]> {
+  private getFileKey(fileId: string): string {
+    return fileId.startsWith(this.filePrefix) ? fileId : `${this.filePrefix}${fileId}`;
+  }
+
+  private async getFolderPath(folderId: string): Promise<string> {
+    if (folderId.endsWith('/')) {
+      return folderId;
+    }
+    
     try {
+      // Try to find folder marker object to get its actual path
       const command = new ListObjectsV2Command({
         Bucket: this.bucket,
-        Prefix: directoryPath,
-        Delimiter: '/'
+        Prefix: `${this.folderPrefix}${folderId}/`,
+        MaxKeys: 1
       });
       
       const response = await this.s3Client.send(command);
       
-      if (!response.Contents) {
-        return [];
+      if (response.Contents && response.Contents.length > 0) {
+        // Found the folder
+        return response.Contents[0].Key;
       }
       
-      return response.Contents.map(object => ({
-        name: object.Key.split('/').pop(),
-        path: object.Key,
-        size: object.Size,
-        lastModified: object.LastModified
-      }));
+      // If not found with folder prefix, assume the ID is the full path
+      return folderId.endsWith('/') ? folderId : `${folderId}/`;
     } catch (error) {
-      logger.error(`Failed to list files from S3: ${error.message}`);
-      throw new AppError('Failed to list files from S3', 500);
+      logger.error(`Failed to get folder path from S3: ${error.message}`);
+      // Default to just using the ID with the folder prefix
+      return `${this.folderPrefix}${folderId}/`;
     }
   }
 }
