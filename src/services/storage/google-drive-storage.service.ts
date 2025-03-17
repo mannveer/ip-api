@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import configs from '../../config';
 import logger from '../../utils/logger';
 import { AppError } from '../../utils/AppError';
-import { GoogleDriveFileMetadata, GoogleDriveFileResponse, GoogleDriveStorageProviderInterface } from '../../interfaces/file.interface';
+import { FileMetadata, GoogleDriveFileMetadata, GoogleDriveFileResponse, GoogleDriveStorageProviderInterface } from '../../interfaces/file.interface';
 
 // Add type declaration for uuid
 declare module 'uuid';
@@ -477,6 +477,35 @@ export class GoogleDriveStorageProvider implements GoogleDriveStorageProviderInt
         throw new AppError('Failed to share file', 500);
       }
     }
+
+    getFile(fileId: string): Promise<FileMetadata> {
+      return Promise.resolve({} as FileMetadata);
+    }
+  
+    getFiles(fileIds: string[]): Promise<FileMetadata[]> {
+      return Promise.resolve([]);
+    }
+  
+    uploadFiles(files: Express.Multer.File[]): Promise<string[]> {
+      return Promise.resolve([]);
+    }
+  
+    deleteFiles(fileIds: string[]): Promise<boolean[]> {
+      return Promise.resolve([]);
+    }
+  
+    getFilesFromFolder(folderId: string): Promise<FileMetadata[]> {
+      return Promise.resolve([]);
+    }
+  
+    getAllFilesMetadataFromFolder(folderId: string): Promise<FileMetadata[]> {
+      return Promise.resolve([]);
+    }
+  
+    getFileMetadata(fileId: string): Promise<FileMetadata> {
+      return Promise.resolve({} as FileMetadata);
+    }
+
   }
   
   let driveServiceInstance: GoogleDriveStorageProvider | null = null;

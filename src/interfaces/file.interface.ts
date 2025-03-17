@@ -22,7 +22,7 @@ export interface IFileStorageProvider {
   // Single file operations
   getFile(fileId: string): Promise<FileMetadata>;
   getFiles(fileIds: string[]): Promise<FileMetadata[]>;
-  uploadFile(file: Express.Multer.File, fileName?: string): Promise<string>;
+  uploadFile(file: Express.Multer.File, fileName?: string): Promise<string | {fileId: string, metadata: GoogleDriveFileMetadata}>;
   uploadFiles(files: Express.Multer.File[]): Promise<string[]>;
   deleteFile(fileId: string): Promise<boolean>;
   deleteFiles(fileIds: string[]): Promise<boolean[]>;
